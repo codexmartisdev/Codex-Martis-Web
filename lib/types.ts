@@ -29,8 +29,128 @@ export interface Project {
     outOfScope: string[];
   };
   lastCommit?: string;
+  importOrigin?: ProjectImportOrigin;
+  contextSummary?: string;
+  techStack?: ProjectImportTechStack;
+  repositoryInfo?: ProjectImportRepository;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProjectImportSource {
+  type?: string;
+  repository_name?: string | null;
+  repository_url?: string | null;
+  branch_analyzed?: string | null;
+  commit_analyzed?: string | null;
+  analysis_date?: string | null;
+}
+
+export interface ProjectImportProjectInfo {
+  name: string;
+  identifier?: string | null;
+  description?: string | null;
+  type?: string | null;
+  project_status?: ProjectStatus | string | null;
+  project_health?: ProjectHealth | string | null;
+  current_phase?: string | null;
+  current_objective?: string | null;
+  progress?: number | null;
+}
+
+export interface ProjectImportRepository {
+  owner?: string | null;
+  name?: string | null;
+  default_branch?: string | null;
+  framework?: string | null;
+  language?: string[];
+  package_manager?: string | null;
+}
+
+export interface ProjectImportTechStack {
+  frontend?: string[];
+  backend?: string[];
+  database?: string[];
+  authentication?: string[];
+  hosting?: string[];
+  email?: string[];
+  storage?: string[];
+  other?: string[];
+}
+
+export interface ProjectImportDetectedService {
+  service?: string | null;
+  category?: string | null;
+  evidence?: string | null;
+  configuration_status?: 'detected_in_code' | 'configured' | 'not_confirmed' | string | null;
+  project_identifier?: string | null;
+  url?: string | null;
+}
+
+export interface ProjectImportCurrentState {
+  working?: string[];
+  partially_working?: string[];
+  not_working?: string[];
+  not_tested?: string[];
+  out_of_scope?: string[];
+}
+
+export interface ProjectImportInitialTask {
+  title: string;
+  description?: string | null;
+  type?: string | null;
+  priority?: string | null;
+  status?: string | null;
+  evidence?: string | null;
+}
+
+export interface ProjectImportIssue {
+  title: string;
+  description?: string | null;
+  severity?: 'critica' | 'alta' | 'media' | 'baixa' | string | null;
+  evidence?: string | null;
+}
+
+export interface ProjectImportNextAction {
+  title: string;
+  description?: string | null;
+  priority?: string | null;
+  recommended_tool?: string | null;
+  reason?: string | null;
+}
+
+export interface ProjectImportConfidence {
+  overall?: string | null;
+  limitations?: string[];
+}
+
+export interface ProjectImportSchema1 {
+  schema_version: '1.0' | string;
+  import_type: 'project_creation' | string;
+  source?: ProjectImportSource;
+  project: ProjectImportProjectInfo;
+  repository?: ProjectImportRepository;
+  tech_stack?: ProjectImportTechStack;
+  detected_services?: ProjectImportDetectedService[];
+  current_state?: ProjectImportCurrentState;
+  initial_tasks?: ProjectImportInitialTask[];
+  issues?: ProjectImportIssue[];
+  next_action?: ProjectImportNextAction;
+  context_summary?: string | null;
+  analysis_confidence?: ProjectImportConfidence;
+}
+
+export interface ProjectImportOrigin {
+  schemaVersion: string;
+  importType: string;
+  repositoryUrl?: string;
+  repositoryName?: string;
+  branchAnalyzed?: string;
+  commitAnalyzed?: string;
+  analysisDate?: string;
+  importedAt: string;
+  analysisConfidence?: string;
+  limitations?: string[];
 }
 
 export interface Task {

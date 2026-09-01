@@ -19,6 +19,7 @@ import {
   NewEnvironmentModal,
   CommandPaletteModal,
 } from '@/components/Modals';
+import { ImportProjectJsonModal } from '@/components/ImportProjectJsonModal';
 
 import { MarsSphere } from '@/components/MarsSphere';
 
@@ -28,6 +29,7 @@ function CodexApp() {
 
   // Modal States
   const [isNewProjectOpen, setIsNewProjectOpen] = useState<boolean>(false);
+  const [isImportProjectJsonOpen, setIsImportProjectJsonOpen] = useState<boolean>(false);
   const [isNewTaskOpen, setIsNewTaskOpen] = useState<boolean>(false);
   const [isNewEnvOpen, setIsNewEnvOpen] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
@@ -138,6 +140,9 @@ function CodexApp() {
                     setModalProjectId(undefined);
                     setIsNewProjectOpen(true);
                   }}
+                  onOpenImportProjectModal={() => {
+                    setIsImportProjectJsonOpen(true);
+                  }}
                   onNavigateTab={setCurrentTab}
                 />
               )}
@@ -177,6 +182,15 @@ function CodexApp() {
         onCreated={(newId) => {
           setSelectedProjectId(newId);
         }}
+      />
+
+      <ImportProjectJsonModal
+        isOpen={isImportProjectJsonOpen}
+        onClose={() => setIsImportProjectJsonOpen(false)}
+        onCreated={(newId) => {
+          setSelectedProjectId(newId);
+        }}
+        onOpenProject={handleOpenProject}
       />
 
       <NewTaskModal

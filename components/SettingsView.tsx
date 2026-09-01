@@ -13,11 +13,63 @@ import {
   CheckCircle2,
   Code2,
   Lock,
+  FileText,
+  Copy,
+  Eye,
+  Check,
 } from 'lucide-react';
+import { PromptViewerModal } from './PromptViewerModal';
+import {
+  DEFAULT_PROJECT_UPDATE_PROMPT,
+  DEFAULT_PROJECT_IMPORT_PROMPT,
+} from '@/lib/constants/prompts';
 
 export const SettingsView: React.FC = () => {
   const { currentUser, resetAllDataToDefault, projects, tasks, sessions, history, environments } = useStore();
   const [resetSuccess, setResetSuccess] = useState(false);
+  const [activePromptModal, setActivePromptModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    schemaName: string;
+    content: string;
+    filename: string;
+  }>({
+    isOpen: false,
+    title: '',
+    schemaName: '',
+    content: '',
+    filename: '',
+  });
+  const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null);
+
+  const handleCopyPrompt = async (id: string, text: string) => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopiedPromptId(id);
+      setTimeout(() => setCopiedPromptId(null), 2500);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDownloadTxt = (filename: string, text: string) => {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleExportFullState = () => {
     const fullState = {
@@ -117,6 +169,126 @@ export const SettingsView: React.FC = () => {
         )}
       </div>
 
+      {/* System Prompts & Schemas */}
+      <div className="bg-[#0C0C0E] border border-[#232328] rounded-xl p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-bold font-heading text-[#E84A32] uppercase tracking-wider flex items-center gap-2">
+            <FileText className="w-4 h-4" />
+            TEMPLATES DE PROMPTS & SCHEMAS OFICIAIS
+          </h2>
+          <span className="text-[10px] text-[#808088] font-mono-code">Versão 1.0</span>
+        </div>
+        <p className="text-xs text-[#808088]">
+          Prompts estruturados para geração externa de snapshots técnicos por IA (Claude, ChatGPT, AI Studio, etc.).
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          {/* Prompt 1: Análise Inicial de Repositório */}
+          <div className="p-4 rounded-xl bg-[#070709] border border-[#1C1C22] space-y-3 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-[#181820] text-[#E84A32] font-mono-code font-bold">
+                  PROJECT IMPORT SCHEMA 1.0
+                </span>
+                <span className="text-[10px] text-[#808088] font-mono-code">Criação</span>
+              </div>
+              <h3 className="text-sm font-bold text-[#F2F2F3] mt-2 font-heading">
+                Análise Inicial de Repositório
+              </h3>
+              <p className="text-xs text-[#808088] mt-1 line-clamp-2">
+                Utilizado para cadastrar novos projetos no Codex Martis a partir de análise estática ou leitura de repositório.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#141418]">
+              <button
+                onClick={() => handleCopyPrompt('import-prompt', DEFAULT_PROJECT_IMPORT_PROMPT)}
+                className="px-2.5 py-1.5 rounded-lg bg-[#141418] hover:bg-[#1E1E26] border border-[#282832] text-xs font-bold font-heading text-[#D8D8DC] flex items-center gap-1.5 transition-colors"
+              >
+                {copiedPromptId === 'import-prompt' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-[#E84A32]" />}
+                <span>{copiedPromptId === 'import-prompt' ? 'COPIADO' : 'COPIAR'}</span>
+              </button>
+
+              <button
+                onClick={() => handleDownloadTxt('codex-martis-project-import-schema-1.0.txt', DEFAULT_PROJECT_IMPORT_PROMPT)}
+                className="px-2.5 py-1.5 rounded-lg bg-[#141418] hover:bg-[#1E1E26] border border-[#282832] text-xs font-bold font-heading text-[#D8D8DC] flex items-center gap-1.5 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5 text-[#E84A32]" />
+                <span>BAIXAR .TXT</span>
+              </button>
+
+              <button
+                onClick={() =>
+                  setActivePromptModal({
+                    isOpen: true,
+                    title: 'Prompt de Análise Inicial de Repositório',
+                    schemaName: 'Project Import Schema 1.0',
+                    content: DEFAULT_PROJECT_IMPORT_PROMPT,
+                    filename: 'codex-martis-project-import-schema-1.0.txt',
+                  })
+                }
+                className="px-2.5 py-1.5 rounded-lg bg-[#141418] hover:bg-[#1E1E26] border border-[#282832] text-xs font-bold font-heading text-[#D8D8DC] flex items-center gap-1.5 transition-colors"
+              >
+                <Eye className="w-3.5 h-3.5 text-[#E84A32]" />
+                <span>VISUALIZAR</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Prompt 2: Atualização de Projeto */}
+          <div className="p-4 rounded-xl bg-[#070709] border border-[#1C1C22] space-y-3 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-[#181820] text-emerald-400 font-mono-code font-bold">
+                  PROJECT UPDATE SCHEMA 1.0
+                </span>
+                <span className="text-[10px] text-[#808088] font-mono-code">Patch / Atualização</span>
+              </div>
+              <h3 className="text-sm font-bold text-[#F2F2F3] mt-2 font-heading">
+                Atualização de Projeto
+              </h3>
+              <p className="text-xs text-[#808088] mt-1 line-clamp-2">
+                Utilizado para aplicar patch incremental no progresso, tarefas, saúde e decisões de projetos já existentes.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#141418]">
+              <button
+                onClick={() => handleCopyPrompt('update-prompt', DEFAULT_PROJECT_UPDATE_PROMPT)}
+                className="px-2.5 py-1.5 rounded-lg bg-[#141418] hover:bg-[#1E1E26] border border-[#282832] text-xs font-bold font-heading text-[#D8D8DC] flex items-center gap-1.5 transition-colors"
+              >
+                {copiedPromptId === 'update-prompt' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-[#E84A32]" />}
+                <span>{copiedPromptId === 'update-prompt' ? 'COPIADO' : 'COPIAR'}</span>
+              </button>
+
+              <button
+                onClick={() => handleDownloadTxt('codex-martis-project-update-schema-1.0.txt', DEFAULT_PROJECT_UPDATE_PROMPT)}
+                className="px-2.5 py-1.5 rounded-lg bg-[#141418] hover:bg-[#1E1E26] border border-[#282832] text-xs font-bold font-heading text-[#D8D8DC] flex items-center gap-1.5 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5 text-[#E84A32]" />
+                <span>BAIXAR .TXT</span>
+              </button>
+
+              <button
+                onClick={() =>
+                  setActivePromptModal({
+                    isOpen: true,
+                    title: 'Prompt de Atualização de Projeto',
+                    schemaName: 'Project Update Schema 1.0',
+                    content: DEFAULT_PROJECT_UPDATE_PROMPT,
+                    filename: 'codex-martis-project-update-schema-1.0.txt',
+                  })
+                }
+                className="px-2.5 py-1.5 rounded-lg bg-[#141418] hover:bg-[#1E1E26] border border-[#282832] text-xs font-bold font-heading text-[#D8D8DC] flex items-center gap-1.5 transition-colors"
+              >
+                <Eye className="w-3.5 h-3.5 text-[#E84A32]" />
+                <span>VISUALIZAR</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* System Specifications */}
       <div className="bg-[#0C0C0E] border border-[#232328] rounded-xl p-6 space-y-3">
         <h2 className="text-xs font-bold font-heading text-[#E84A32] uppercase tracking-wider flex items-center gap-2">
@@ -142,6 +314,16 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Prompt Viewer Modal */}
+      <PromptViewerModal
+        isOpen={activePromptModal.isOpen}
+        onClose={() => setActivePromptModal({ ...activePromptModal, isOpen: false })}
+        title={activePromptModal.title}
+        schemaName={activePromptModal.schemaName}
+        promptContent={activePromptModal.content}
+        downloadFilename={activePromptModal.filename}
+      />
     </div>
   );
 };

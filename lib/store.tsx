@@ -21,56 +21,19 @@ import {
   subscribeToAuthState,
   AUTHORIZED_OPERATOR_EMAIL,
 } from './firebase/auth';
+import {
+  DEFAULT_PROJECT_UPDATE_PROMPT,
+  DEFAULT_PROJECT_IMPORT_PROMPT,
+} from './constants/prompts';
+import {
+  validateProjectImportJson,
+  buildEntitiesFromProjectImport,
+  ValidationResult,
+} from './projectImport';
+import { ProjectImportSchema1 } from './types';
 
 // Default prompt template for Codex Martis v1.0
-const DEFAULT_GLOBAL_PROMPT_TEMPLATE = `Você é o assistente técnico de desenvolvimento e engenharia do projeto.
-Analise as alterações realizadas, o status atual do código, testes e decisões tomadas.
-Gere uma atualização estruturada para o sistema **Codex Martis** seguindo estritamente o schema JSON versão 1.0.
-
-Formato esperado de saída (somente o bloco JSON):
-\`\`\`json
-{
-  "schema_version": "1.0",
-  "project_id": "{PROJECT_ID}",
-  "health": "saudavel | atencao | bloqueado",
-  "progress": 75,
-  "status_summary": "Resumo conciso da situação atual",
-  "next_mission": {
-    "title": "Próxima ação prioritária",
-    "why_important": "Justificativa da importância para o objetivo da fase",
-    "recommended_tool": "Google AI Studio | Cloud Shell | VS Code"
-  },
-  "completed_task_ids": ["task_id_1"],
-  "completed_task_titles": ["Corrigir persistência no Firestore"],
-  "new_tasks": [
-    {
-      "title": "Título da nova tarefa identificada",
-      "description": "Detalhes técnicos",
-      "type": "Bug | Feature | Melhoria | Auditoria | Infraestrutura",
-      "priority": "Crítica | Alta | Média | Baixa"
-    }
-  ],
-  "resolved_issues": ["Falha no cadastro sem recarregar"],
-  "commit": {
-    "hash": "d92ac73",
-    "message": "Corrige persistência e ajusta regras do Firestore"
-  },
-  "deploy": {
-    "performed": true,
-    "environment": "Produção",
-    "target": "Vercel"
-  },
-  "decisions": [
-    "Removido escopo secundário de integração para priorizar MVP solo"
-  ],
-  "state_photograph": {
-    "working": ["Autenticação", "Listagem"],
-    "partially_working": ["Cadastro de processos"],
-    "not_working": [],
-    "untested": ["Exportação PDF"]
-  }
-}
-\`\`\``;
+const DEFAULT_GLOBAL_PROMPT_TEMPLATE = DEFAULT_PROJECT_UPDATE_PROMPT;
 
 const INITIAL_PROJECTS: Project[] = [
   {
@@ -677,6 +640,10 @@ interface StoreContextType {
   importProjectUpdateJson: (projectId: string, jsonString: string) => { success: boolean; error?: string; diff?: any };
   applyParsedUpdate: (projectId: string, parsedData: any, rawJsonString?: string) => void;
 
+  // Project Creation via JSON Import
+  validateProjectImport: (jsonString: string) => ValidationResult;
+  createProjectFromImport: (data: ProjectImportSchema1, rawJsonString?: string) => { success: boolean; projectId?: string; error?: string };
+
   // Real Firebase Auth
   signInWithGoogleAuth: () => Promise<{ success: boolean; error?: string }>;
   login: (email?: string, pass?: string, isGoogle?: boolean) => Promise<boolean>;
@@ -778,23 +745,42 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
 
   const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>(() => {
+    const defaultList: PromptTemplate[] = [
+      {
+        id: 'template-project-update',
+        name: 'Atualização de Projeto',
+        schema_version: '1.0',
+        content: DEFAULT_PROJECT_UPDATE_PROMPT,
+        isDefault: true,
+      },
+      {
+        id: 'template-project-import',
+        name: 'Análise Inicial de Repositório',
+        schema_version: '1.0',
+        content: DEFAULT_PROJECT_IMPORT_PROMPT,
+        isDefault: false,
+      },
+    ];
+
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('codex_prompt_templates');
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+          const parsed: PromptTemplate[] = JSON.parse(saved);
+          // Ensure both templates exist
+          const hasImportTemplate = parsed.some(
+            (t) => t.id === 'template-project-import' || t.name.toLowerCase().includes('inicial')
+          );
+          if (!hasImportTemplate) {
+            return [...parsed, defaultList[1]];
+          }
+          return parsed;
+        }
       } catch (e) {
         console.warn('Error reading promptTemplates from localStorage', e);
       }
     }
-    return [
-      {
-        id: 'template-default',
-        name: 'Padrão Codex Martis v1.0',
-        schema_version: '1.0',
-        content: DEFAULT_GLOBAL_PROMPT_TEMPLATE,
-        isDefault: true,
-      },
-    ];
+    return defaultList;
   });
 
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -1373,6 +1359,14 @@ ${recentHist.map((h) => `- [${h.timestamp}] ${h.title}: ${h.description}`).join(
 
       const parsed = JSON.parse(clean);
 
+      // Check for Project Creation crossover
+      if (parsed.import_type === 'project_creation') {
+        return {
+          success: false,
+          error: 'Este JSON pertence ao fluxo de criação de projeto (Project Import) e não ao de atualização.',
+        };
+      }
+
       if (!parsed.schema_version) {
         return { success: false, error: 'O JSON não contém o campo obrigatório "schema_version".' };
       }
@@ -1545,6 +1539,54 @@ ${recentHist.map((h) => `- [${h.timestamp}] ${h.title}: ${h.description}`).join(
     });
   };
 
+  // Validate Project Import JSON
+  const validateProjectImport = (jsonString: string): ValidationResult => {
+    return validateProjectImportJson(jsonString, projects);
+  };
+
+  // Create Project and all associated entities from validated ProjectImportSchema1
+  const createProjectFromImport = (
+    data: ProjectImportSchema1,
+    rawJsonString?: string
+  ): { success: boolean; projectId?: string; error?: string } => {
+    try {
+      const {
+        project: newProj,
+        tasks: newTasks,
+        environments: newEnvs,
+        historyEvent,
+      } = buildEntitiesFromProjectImport(data, currentUser, rawJsonString);
+
+      // Add Project
+      setProjects((prev) => [newProj, ...prev]);
+
+      // Add Tasks
+      if (newTasks.length > 0) {
+        setTasks((prev) => [...newTasks, ...prev]);
+      }
+
+      // Add Environments
+      if (newEnvs.length > 0) {
+        setEnvironments((prev) => [...newEnvs, ...prev]);
+      }
+
+      // Add History Event
+      addHistoryEvent({
+        type: historyEvent.type,
+        category: historyEvent.category,
+        projectId: newProj.id,
+        projectName: newProj.name,
+        title: historyEvent.title,
+        description: historyEvent.description,
+        commitHash: historyEvent.commitHash,
+      });
+
+      return { success: true, projectId: newProj.id };
+    } catch (err: any) {
+      return { success: false, error: `Falha ao criar projeto: ${err.message}` };
+    }
+  };
+
   // Real Firebase Auth functions
   const signInWithGoogleAuth = async () => {
     setAuthError(null);
@@ -1658,6 +1700,8 @@ ${recentHist.map((h) => `- [${h.timestamp}] ${h.title}: ${h.description}`).join(
         updateGlobalPromptTemplate,
         importProjectUpdateJson,
         applyParsedUpdate,
+        validateProjectImport,
+        createProjectFromImport,
         signInWithGoogleAuth,
         login,
         logout,

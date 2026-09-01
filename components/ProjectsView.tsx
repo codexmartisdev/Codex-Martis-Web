@@ -30,12 +30,14 @@ import {
 interface ProjectsViewProps {
   onOpenProject: (projectId: string) => void;
   onOpenNewProjectModal: () => void;
+  onOpenImportProjectModal: () => void;
   onNavigateTab: (tab: string) => void;
 }
 
 export const ProjectsView: React.FC<ProjectsViewProps> = ({
   onOpenProject,
   onOpenNewProjectModal,
+  onOpenImportProjectModal,
   onNavigateTab,
 }) => {
   const { projects, tasks, environments, history, getProjectNextMissionTitle } = useStore();
@@ -173,13 +175,23 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={onOpenNewProjectModal}
-          className="px-4 py-2 rounded-lg bg-[#E84A32] hover:bg-[#F06447] text-white font-bold text-xs tracking-wider uppercase flex items-center gap-2 shadow-[0_0_20px_rgba(232,74,50,0.3)] transition-all font-heading self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Novo projeto</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={onOpenNewProjectModal}
+            className="px-4 py-2 rounded-lg bg-[#E84A32] hover:bg-[#F06447] text-white font-bold text-xs tracking-wider uppercase flex items-center gap-2 shadow-[0_0_20px_rgba(232,74,50,0.3)] transition-all font-heading"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Novo projeto</span>
+          </button>
+
+          <button
+            onClick={onOpenImportProjectModal}
+            className="px-4 py-2 rounded-lg bg-[#141418] hover:bg-[#1E1E26] border border-[#282832] hover:border-[#E84A32]/60 text-[#F2F2F3] font-bold text-xs tracking-wider uppercase flex items-center gap-2 transition-all font-heading"
+          >
+            <Code2 className="w-4 h-4 text-[#E84A32]" />
+            <span>Importar Projeto JSON</span>
+          </button>
+        </div>
       </div>
 
       {/* Top 5 Metric Cards */}
