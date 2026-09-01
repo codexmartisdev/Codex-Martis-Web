@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+:root {
+  --mars-red: #E84A32;
+  --mars-highlight: #F06447;
+  --mars-dark: #7D1A12;
+  --surface-0: #050505;
+  --surface-1: #0C0C0E;
+  --surface-2: #141416;
+  --surface-3: #1C1C20;
+  --border-dim: #222227;
+  --border-focus: #E84A32;
+}
+
+body {
+  background-color: #050505;
+  color: #F2F2F3;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+}
+
+.font-heading {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.font-mono-code {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Sci-fi HUD corner accents & borders */
+.hud-card {
+  position: relative;
+  background-color: #0C0C0E;
+  border: 1px solid #232328;
+  border-radius: 8px;
+}
+
+.hud-card-active {
+  position: relative;
+  background-color: #0E0E12;
+  border: 1px solid rgba(232, 74, 50, 0.4);
+  box-shadow: 0 0 20px -5px rgba(232, 74, 50, 0.15);
+}
+
+.hud-card-corners::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid #E84A32;
+  border-left: 2px solid #E84A32;
+  pointer-events: none;
+}
+
+.hud-card-corners::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 8px;
+  height: 8px;
+  border-bottom: 2px solid #E84A32;
+  border-right: 2px solid #E84A32;
+  pointer-events: none;
+}
+
+/* Custom Martian scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #09090b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #E84A32;
+}
+
+/* Radial Mars glow */
+.mars-glow {
+  box-shadow: 0 0 35px -5px rgba(232, 74, 50, 0.35);
+}
+
+.mars-text-glow {
+  text-shadow: 0 0 12px rgba(232, 74, 50, 0.5);
+}
+

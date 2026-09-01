@@ -1,0 +1,6 @@
+{
+  "name": "Codex Martis",
+  "description": "Central de comando para gestão e preservação de contexto de projetos, tarefas, sessões, ambientes e histórico.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
