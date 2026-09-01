@@ -1,53 +1,345 @@
 // Codex Martis Prompt Templates & Schemas
 
-export const DEFAULT_PROJECT_UPDATE_PROMPT = `Você é o assistente técnico de desenvolvimento e engenharia do projeto.
-Analise as alterações realizadas, o status atual do código, testes e decisões tomadas.
-Gere uma atualização estruturada para o sistema **Codex Martis** seguindo estritamente o schema JSON versão 1.0.
+export const DEFAULT_PROJECT_UPDATE_PROMPT = `# CODEX MARTIS — ATUALIZAÇÃO DE PROJETO
 
-Formato esperado de saída (somente o bloco JSON):
-\`\`\`json
+Você está atuando como assistente técnico/orquestrador de um projeto de desenvolvimento de software.
+
+Com base EXCLUSIVAMENTE:
+
+1. no contexto atual do projeto fornecido pelo Codex Martis; e
+2. em tudo que efetivamente ocorreu nesta conversa/sessão de trabalho,
+
+gere uma atualização estruturada compatível com:
+
+CODEX MARTIS PROJECT UPDATE SCHEMA 1.0
+
+O objetivo é informar ao Codex Martis:
+
+- o estado atual do projeto;
+- o que foi realizado;
+- o que foi corrigido;
+- o que continua pendente;
+- quais problemas foram identificados;
+- quais problemas foram resolvidos;
+- quais decisões foram tomadas;
+- quais alterações técnicas foram realizadas;
+- quais ambientes foram alterados;
+- qual commit foi produzido;
+- se houve deploy;
+- qual é a fotografia funcional atual;
+- qual deve ser a próxima ação principal.
+
+REGRAS DE CONFIABILIDADE
+
+1. Analise toda a sessão atual antes de gerar a resposta.
+
+2. Não invente informações.
+
+3. Não presuma que algo foi concluído apenas porque foi sugerido.
+
+4. Diferencie claramente:
+
+- discutido
+- planejado
+- executado
+- executado não validado
+- testado
+- confirmado funcionando
+
+5. Uma tarefa somente pode ser marcada como:
+
+"concluida"
+
+quando houver evidência suficiente de conclusão real.
+
+6. Se algo foi implementado mas ainda não foi validado, utilizar:
+
+"executada_nao_validada"
+
+7. Um problema somente pode ser marcado:
+
+"resolvido"
+
+quando houver evidência suficiente de correção e validação.
+
+8. Não trate ausência de erro como comprovação de funcionamento.
+
+9. Quando não houver informação:
+
+valor único → null
+lista → []
+
+10. Não inclua:
+
+- senhas
+- API keys
+- tokens
+- secrets
+- private keys
+- cookies
+- service accounts
+- credenciais
+
+11. Preserve exatamente quando conhecidos:
+
+- projectId
+- task IDs
+- commit hashes
+- branches
+- nomes técnicos
+- URLs públicas
+
+12. Não utilize Markdown na resposta final.
+
+13. Não escreva explicações antes ou depois.
+
+14. Retorne SOMENTE JSON válido.
+
+CLASSIFICAÇÕES:
+
+project_status:
+- "planejamento"
+- "desenvolvimento"
+- "teste"
+- "producao"
+- "pausado"
+- "encerrado"
+
+project_health:
+- "saudavel"
+- "atencao"
+- "bloqueado"
+- "nao_avaliado"
+
+session.result:
+- "sucesso"
+- "sucesso_parcial"
+- "sem_alteracoes"
+- "falha"
+- "indeterminado"
+
+task.status:
+- "pendente"
+- "em_andamento"
+- "executada_nao_validada"
+- "concluida"
+- "cancelada"
+
+task.type:
+- "bug"
+- "melhoria"
+- "feature"
+- "auditoria"
+- "infraestrutura"
+- "teste"
+- "documentacao"
+- "ideia"
+- "outro"
+
+priority:
+- "critica"
+- "alta"
+- "media"
+- "baixa"
+
+issue.status:
+- "aberto"
+- "em_correcao"
+- "corrigido_nao_validado"
+- "resolvido"
+- "aceito"
+- "descartado"
+
+FORMATO EXATO:
+
 {
   "schema_version": "1.0",
-  "project_id": "{PROJECT_ID}",
-  "health": "saudavel | atencao | bloqueado",
-  "progress": 75,
-  "status_summary": "Resumo conciso da situação atual",
-  "next_mission": {
-    "title": "Próxima ação prioritária",
-    "why_important": "Justificativa da importância para o objetivo da fase",
-    "recommended_tool": "Google AI Studio | Cloud Shell | VS Code"
+  "update_type": "project_update",
+
+  "project": {
+    "identifier": null,
+    "project_status": null,
+    "project_health": null,
+    "current_phase": null,
+    "current_objective": null,
+    "progress": null
   },
-  "completed_task_ids": ["task_id_1"],
-  "completed_task_titles": ["Corrigir persistência no Firestore"],
-  "new_tasks": [
+
+  "session": {
+    "summary": null,
+    "result": null,
+    "work_performed": [],
+    "tests_performed": [],
+    "tests_result": null
+  },
+
+  "completed_tasks": [
     {
-      "title": "Título da nova tarefa identificada",
-      "description": "Detalhes técnicos",
-      "type": "Bug | Feature | Melhoria | Auditoria | Infraestrutura",
-      "priority": "Crítica | Alta | Média | Baixa"
+      "task_id": null,
+      "title": null,
+      "type": null,
+      "priority": null,
+      "status": "concluida",
+      "description": null
     }
   ],
-  "resolved_issues": ["Falha no cadastro sem recarregar"],
-  "commit": {
-    "hash": "d92ac73",
-    "message": "Corrige persistência e ajusta regras do Firestore"
-  },
-  "deploy": {
-    "performed": true,
-    "environment": "Produção",
-    "target": "Vercel"
-  },
-  "decisions": [
-    "Removido escopo secundário de integração para priorizar MVP solo"
+
+  "updated_tasks": [
+    {
+      "task_id": null,
+      "title": null,
+      "type": null,
+      "priority": null,
+      "previous_status": null,
+      "status": null,
+      "description": null
+    }
   ],
-  "state_photograph": {
-    "working": ["Autenticação", "Listagem"],
-    "partially_working": ["Cadastro de processos"],
+
+  "new_tasks": [
+    {
+      "title": null,
+      "type": null,
+      "priority": null,
+      "status": "pendente",
+      "description": null
+    }
+  ],
+
+  "issues": [
+    {
+      "title": null,
+      "severity": null,
+      "status": null,
+      "description": null,
+      "evidence": null
+    }
+  ],
+
+  "resolved_issues": [
+    {
+      "title": null,
+      "severity": null,
+      "status": "resolvido",
+      "resolution": null,
+      "validation": null
+    }
+  ],
+
+  "decisions": [
+    {
+      "title": null,
+      "decision": null,
+      "reason": null,
+      "impact": null
+    }
+  ],
+
+  "technical_changes": [
+    {
+      "area": null,
+      "description": null,
+      "status": null
+    }
+  ],
+
+  "environment_changes": [
+    {
+      "environment_id": null,
+      "service": null,
+      "environment": null,
+      "change": null,
+      "result": null
+    }
+  ],
+
+  "repository": {
+    "repository_name": null,
+    "branch": null,
+    "commit": null,
+    "commit_message": null,
+    "commit_status": null
+  },
+
+  "deployment": {
+    "performed": false,
+    "platform": null,
+    "environment": null,
+    "url": null,
+    "status": null
+  },
+
+  "known_state": {
+    "working": [],
+    "partially_working": [],
     "not_working": [],
-    "untested": ["Exportação PDF"]
-  }
+    "not_tested": [],
+    "out_of_scope": []
+  },
+
+  "next_action": {
+    "task_id": null,
+    "title": null,
+    "description": null,
+    "priority": null,
+    "recommended_tool": null,
+    "reason": null
+  },
+
+  "recommended_follow_up": [],
+
+  "context_summary": null
 }
-\`\`\``;
+
+REGRAS FINAIS
+
+context_summary deve permitir que outro assistente de IA retome o trabalho futuramente.
+
+Incluir quando relevante:
+
+- objetivo
+- estado atual
+- alterações
+- problemas
+- decisões
+- testes
+- commit
+- deploy
+- próxima missão
+
+next_action deve conter SOMENTE UMA ação.
+
+Deve ser específica e executável.
+
+RUIM:
+
+"Continuar o projeto."
+
+BOM:
+
+"Validar a persistência das tarefas no Firestore após recarregar a aplicação e corrigir eventuais divergências encontradas."
+
+Sempre prefira:
+
+"não testado"
+
+em vez de:
+
+"funcionando"
+
+quando não houver validação.
+
+Sempre prefira:
+
+"executada_nao_validada"
+
+em vez de:
+
+"concluida"
+
+quando a implementação ainda não tiver sido validada.
+
+Agora analise todo o contexto fornecido e a sessão atual e retorne SOMENTE o JSON válido.`;
 
 export const DEFAULT_PROJECT_IMPORT_PROMPT = `# CODEX MARTIS — ANÁLISE INICIAL DE REPOSITÓRIO
 

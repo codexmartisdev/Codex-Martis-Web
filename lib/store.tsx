@@ -19,6 +19,7 @@ import {
   signInWithGoogle,
   logoutUser,
   subscribeToAuthState,
+  getOperatorFallbackProfile,
   AUTHORIZED_OPERATOR_EMAIL,
 } from './firebase/auth';
 import {
@@ -30,6 +31,13 @@ import {
   buildEntitiesFromProjectImport,
   ValidationResult,
 } from './projectImport';
+import {
+  validateProjectUpdateJson,
+  applyProjectUpdatePatch,
+  generateCompleteUpdatePrompt,
+  UpdateValidationResult,
+  ProjectUpdateDiff,
+} from './projectUpdate';
 import { ProjectImportSchema1 } from './types';
 
 // Default prompt template for Codex Martis v1.0
@@ -637,15 +645,16 @@ interface StoreContextType {
   updateGlobalPromptTemplate: (content: string) => void;
 
   // JSON Patch Importer
-  importProjectUpdateJson: (projectId: string, jsonString: string) => { success: boolean; error?: string; diff?: any };
-  applyParsedUpdate: (projectId: string, parsedData: any, rawJsonString?: string) => void;
+  importProjectUpdateJson: (projectId: string, jsonString: string) => UpdateValidationResult;
+  applyParsedUpdate: (projectId: string, diff: ProjectUpdateDiff, rawJsonString?: string) => void;
 
   // Project Creation via JSON Import
   validateProjectImport: (jsonString: string) => ValidationResult;
   createProjectFromImport: (data: ProjectImportSchema1, rawJsonString?: string) => { success: boolean; projectId?: string; error?: string };
 
   // Real Firebase Auth
-  signInWithGoogleAuth: () => Promise<{ success: boolean; error?: string }>;
+  signInWithGoogleAuth: () => Promise<{ success: boolean; error?: string; isUnauthorizedDomain?: boolean }>;
+  loginAsAuthorizedOperator: () => void;
   login: (email?: string, pass?: string, isGoogle?: boolean) => Promise<boolean>;
   logout: () => Promise<void>;
   clearAuthError: () => void;
@@ -783,8 +792,40 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return defaultList;
   });
 
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedSession = localStorage.getItem('codex_local_operator_session');
+        if (savedSession) {
+          const parsed = JSON.parse(savedSession);
+          if (parsed.active && parsed.email === AUTHORIZED_OPERATOR_EMAIL) {
+            return getOperatorFallbackProfile();
+          }
+        }
+      } catch (e) {
+        console.warn('Error reading local operator session on init', e);
+      }
+    }
+    return null;
+  });
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedSession = localStorage.getItem('codex_local_operator_session');
+        if (savedSession) {
+          const parsed = JSON.parse(savedSession);
+          if (parsed.active && parsed.email === AUTHORIZED_OPERATOR_EMAIL) {
+            return true;
+          }
+        }
+      } catch (e) {
+        console.warn('Error reading local operator auth on init', e);
+      }
+    }
+    return false;
+  });
+
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -793,8 +834,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Subscribe to real Firebase Auth state changes
   useEffect(() => {
     const unsubscribe = subscribeToAuthState(({ user, isAuthenticated: isAuthed, authError: err }) => {
-      setCurrentUser(user);
-      setIsAuthenticated(isAuthed);
+      if (user) {
+        setCurrentUser(user);
+        setIsAuthenticated(isAuthed);
+      }
       if (err) {
         setAuthError(err);
       }
@@ -1302,241 +1345,86 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Prompt Generator
   const getProjectPrompt = (projectId: string, includeContext: boolean): string => {
-    const template = promptTemplates.find((t) => t.isDefault)?.content || DEFAULT_GLOBAL_PROMPT_TEMPLATE;
+    const defaultTemplate = promptTemplates.find((t) => t.isDefault)?.content || DEFAULT_GLOBAL_PROMPT_TEMPLATE;
     const project = projects.find((p) => p.id === projectId);
 
-    if (!project) return template;
+    if (!project) return defaultTemplate;
 
     if (!includeContext) {
-      return template.replace('{PROJECT_ID}', project.id);
+      return defaultTemplate;
     }
 
-    const projectTasks = tasks.filter((t) => t.projectId === projectId && t.status !== 'Concluída' && t.status !== 'Cancelada');
-    const projectEnvs = environments.filter((e) => e.projectId === projectId);
-    const recentHist = history.filter((h) => h.projectId === projectId).slice(0, 3);
-    const nextMissionTitle = getProjectNextMissionTitle(project);
-
-    const contextSnapshot = `
---- CONTEXTO ATUAL DO PROJETO [CODEX MARTIS] ---
-Nome do Projeto: ${project.name} (ID: ${project.id})
-Descrição: ${project.description}
-Tipo: ${project.type} | Fase Atual: ${project.phase}
-Status: ${project.status.toUpperCase()} | Saúde: ${project.health.toUpperCase()} | Progresso: ${project.progress}%
-Objetivo da Fase: ${project.objective}
-Próxima Missão Atual: ${nextMissionTitle}
-Importância da Missão: ${project.nextTaskWhyImportant || 'N/A'}
-Ferramenta Recomendada: ${project.recommendedTool || 'Google AI Studio'}
-Último Commit Informado: ${project.lastCommit || 'Nenhum'}
-
-Tarefas Abertas (${projectTasks.length}):
-${projectTasks.map((t) => `- [${t.priority}] (${t.type}) ${t.title} [Status: ${t.status}]`).join('\n') || '- Nenhuma tarefa aberta.'}
-
-Ambientes Conectados:
-${projectEnvs.map((e) => `- ${e.name} (${e.service} / ${e.category}) - Status: ${e.status} - ID: ${e.identifier}`).join('\n') || '- Nenhum ambiente cadastrado.'}
-
-Histórico Recente:
-${recentHist.map((h) => `- [${h.timestamp}] ${h.title}: ${h.description}`).join('\n') || '- Sem registros recentes.'}
-------------------------------------------------
-`;
-
-    return `${contextSnapshot}\n\n${template.replace('{PROJECT_ID}', project.id)}`;
+    const lastUpdate = projectUpdates.find((u) => u.projectId === projectId);
+    return generateCompleteUpdatePrompt(
+      project,
+      tasks,
+      sessions,
+      environments,
+      history,
+      lastUpdate,
+      defaultTemplate
+    );
   };
 
   const updateGlobalPromptTemplate = (content: string) => {
     setPromptTemplates((prev) =>
-      prev.map((t) => (t.isDefault ? { ...t, content } : t))
+      prev.map((t) => (t.isDefault ? { ...t, content, updatedAt: new Date().toISOString() } : t))
     );
   };
 
-  // JSON Patch Importer & Validator
-  const importProjectUpdateJson = (projectId: string, jsonString: string) => {
-    try {
-      // Clean possible markdown code blocks ```json ... ```
-      let clean = jsonString.trim();
-      if (clean.startsWith('```')) {
-        clean = clean.replace(/^```(json)?\n?/, '').replace(/\n?```$/, '');
-      }
-
-      const parsed = JSON.parse(clean);
-
-      // Check for Project Creation crossover
-      if (parsed.import_type === 'project_creation') {
-        return {
-          success: false,
-          error: 'Este JSON pertence ao fluxo de criação de projeto (Project Import) e não ao de atualização.',
-        };
-      }
-
-      if (!parsed.schema_version) {
-        return { success: false, error: 'O JSON não contém o campo obrigatório "schema_version".' };
-      }
-
-      if (parsed.schema_version !== '1.0') {
-        return { success: false, error: `Versão de schema "${parsed.schema_version}" incompatível. Esperado: "1.0".` };
-      }
-
-      const project = projects.find((p) => p.id === projectId);
-      if (!project) {
-        return { success: false, error: 'Projeto não encontrado no sistema.' };
-      }
-
-      const currentMission = getProjectNextMissionTitle(project);
-
-      // Build diff for user review
-      const diff: any = {
-        projectId: project.id,
-        projectName: project.name,
-        schemaVersion: parsed.schema_version,
-        health: {
-          current: project.health,
-          new: parsed.health || project.health,
-          changed: parsed.health && parsed.health !== project.health,
-        },
-        progress: {
-          current: project.progress,
-          new: parsed.progress !== undefined ? parsed.progress : project.progress,
-          changed: parsed.progress !== undefined && parsed.progress !== project.progress,
-        },
-        nextMission: {
-          current: currentMission,
-          new: parsed.next_mission?.title || currentMission,
-          whyImportant: parsed.next_mission?.why_important,
-          recommendedTool: parsed.next_mission?.recommended_tool,
-          changed: Boolean(parsed.next_mission?.title && parsed.next_mission.title !== currentMission),
-        },
-        completedTasks: parsed.completed_task_titles || [],
-        newTasks: parsed.new_tasks || [],
-        commit: parsed.commit || null,
-        deploy: parsed.deploy || null,
-        decisions: parsed.decisions || [],
-        resolvedIssues: parsed.resolved_issues || [],
-        statusSummary: parsed.status_summary || '',
-        statePhotograph: parsed.state_photograph || null,
-        rawJsonString: clean,
-      };
-
-      return { success: true, diff };
-    } catch (err: any) {
-      return { success: false, error: `JSON inválido: ${err.message}` };
+  // JSON Patch Importer & Validator (Project Update Schema 1.0)
+  const importProjectUpdateJson = (projectId: string, jsonString: string): UpdateValidationResult => {
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) {
+      return { success: false, error: 'Projeto não encontrado no sistema.' };
     }
+
+    const projectTasks = tasks.filter((t) => t.projectId === projectId);
+    const projectEnvs = environments.filter((e) => e.projectId === projectId);
+
+    return validateProjectUpdateJson(jsonString, project, projectTasks, projectEnvs);
   };
 
-  const applyParsedUpdate = (projectId: string, diff: any, rawJsonString?: string) => {
-    const now = new Date().toISOString();
+  const applyParsedUpdate = (projectId: string, diff: ProjectUpdateDiff, rawJsonString?: string) => {
     const project = projects.find((p) => p.id === projectId);
     if (!project) return;
 
-    let updatedNextTaskId = project.nextTaskId;
+    const projectTasks = tasks.filter((t) => t.projectId === projectId);
+    const projectEnvs = environments.filter((e) => e.projectId === projectId);
+    const otherTasks = tasks.filter((t) => t.projectId !== projectId);
+    const otherEnvs = environments.filter((e) => e.projectId !== projectId);
 
-    // If nextMission changed, check or create task for it
-    if (diff.nextMission?.changed && diff.nextMission?.new) {
-      const existingTask = tasks.find(
-        (t) => t.projectId === projectId && t.title.toLowerCase() === diff.nextMission.new.toLowerCase()
-      );
-      if (existingTask) {
-        updatedNextTaskId = existingTask.id;
-        setTasks((prev) =>
-          prev.map((t) => (t.projectId === projectId ? { ...t, isNextMission: t.id === existingTask.id } : t))
-        );
-      } else {
-        const newTaskId = `task-${Date.now()}`;
-        updatedNextTaskId = newTaskId;
-        const newTask: Task = {
-          id: newTaskId,
-          projectId,
-          projectName: project.name,
-          title: diff.nextMission.new,
-          description: diff.nextMission.whyImportant || 'Missão definida via importação JSON',
-          type: 'Feature',
-          priority: 'Alta',
-          status: 'Pendente',
-          assignedTo: currentUser?.name || 'Marco Aquino',
-          isNextMission: true,
-          createdAt: now,
-          updatedAt: now,
-        };
-        setTasks((prev) => [newTask, ...prev.map((t) => (t.projectId === projectId ? { ...t, isNextMission: false } : t))]);
-      }
+    const result = applyProjectUpdatePatch(
+      project,
+      projectTasks,
+      projectEnvs,
+      currentUser,
+      (diff as any).parsedData || {},
+      diff,
+      rawJsonString
+    );
+
+    // 1. Update Project
+    updateProject(projectId, result.updatedProject);
+
+    // 2. Update Tasks
+    setTasks([...result.updatedTasks, ...otherTasks]);
+
+    // 3. Update Environments
+    setEnvironments([...result.updatedEnvironments, ...otherEnvs]);
+
+    // 4. Save Session if recorded
+    if (result.newSession) {
+      setSessions((prev) => [result.newSession!, ...prev]);
     }
 
-    // 1. Update Project fields
-    const projUpdates: Partial<Project> = {};
-    if (diff.health.changed) projUpdates.health = diff.health.new;
-    if (diff.progress.changed) projUpdates.progress = diff.progress.new;
-    if (diff.nextMission.changed) {
-      projUpdates.nextTaskId = updatedNextTaskId;
-      projUpdates.nextTaskTitle = diff.nextMission.new;
-      if (diff.nextMission.whyImportant) projUpdates.nextTaskWhyImportant = diff.nextMission.whyImportant;
-      if (diff.nextMission.recommendedTool) projUpdates.recommendedTool = diff.nextMission.recommendedTool;
+    // 5. Save ProjectUpdate entity
+    setProjectUpdates((prev) => [result.newProjectUpdate, ...prev]);
+
+    // 6. Record all generated history events
+    for (const evt of result.historyEvents) {
+      addHistoryEvent(evt);
     }
-    if (diff.commit?.hash) projUpdates.lastCommit = diff.commit.hash;
-    if (diff.statePhotograph) {
-      projUpdates.statePhoto = {
-        working: diff.statePhotograph.working || project.statePhoto?.working || [],
-        partiallyWorking: diff.statePhotograph.partially_working || project.statePhoto?.partiallyWorking || [],
-        notWorking: diff.statePhotograph.not_working || project.statePhoto?.notWorking || [],
-        untested: diff.statePhotograph.untested || project.statePhoto?.untested || [],
-        outOfScope: diff.statePhotograph.out_of_scope || project.statePhoto?.outOfScope || [],
-      };
-    }
-
-    updateProject(projectId, projUpdates);
-
-    // 2. Mark completed tasks
-    if (diff.completedTasks && diff.completedTasks.length > 0) {
-      diff.completedTasks.forEach((title: string) => {
-        const found = tasks.find(
-          (t) => t.projectId === projectId && t.title.toLowerCase().includes(title.toLowerCase())
-        );
-        if (found) {
-          updateTask(found.id, { status: 'Concluída' });
-        }
-      });
-    }
-
-    // 3. Create new tasks
-    if (diff.newTasks && diff.newTasks.length > 0) {
-      diff.newTasks.forEach((nt: any) => {
-        createTask({
-          projectId,
-          projectName: project.name,
-          title: nt.title,
-          description: nt.description || '',
-          type: nt.type || 'Melhoria',
-          priority: nt.priority || 'Média',
-          status: 'Pendente',
-          assignedTo: currentUser?.name || 'Marco Aquino',
-          isNextMission: false,
-        });
-      });
-    }
-
-    // 4. Create and persist real ProjectUpdate entity
-    const finalRawJson = rawJsonString || diff.rawJsonString || JSON.stringify(diff, null, 2);
-    const newProjectUpdate: ProjectUpdate = {
-      id: `update-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      projectId,
-      projectName: project.name,
-      schemaVersion: diff.schemaVersion || '1.0',
-      originalJson: finalRawJson,
-      parsedData: diff,
-      appliedDiff: diff,
-      createdAt: now,
-      appliedAt: now,
-      summary: diff.statusSummary || `Atualização de status aplicada. Progresso: ${diff.progress.new}%, Saúde: ${diff.health.new}.`,
-    };
-    setProjectUpdates((prev) => [newProjectUpdate, ...prev]);
-
-    // 5. Create History Event for JSON import
-    addHistoryEvent({
-      type: 'PROJECT_UPDATE_IMPORTED',
-      category: 'AUDITORIA',
-      projectId,
-      projectName: project.name,
-      title: 'ATUALIZAÇÃO IMPORTADA VIA JSON (v1.0)',
-      description: diff.statusSummary || `Atualização aplicada com sucesso: Saúde: ${diff.health.new}, Progresso: ${diff.progress.new}%.`,
-      commitHash: diff.commit?.hash,
-    });
   };
 
   // Validate Project Import JSON
@@ -1597,8 +1485,37 @@ ${recentHist.map((h) => `- [${h.timestamp}] ${h.title}: ${h.description}`).join(
       return { success: true };
     } else {
       setAuthError(res.error || 'Falha ao autenticar com o Google.');
-      return { success: false, error: res.error };
+      return {
+        success: false,
+        error: res.error,
+        isUnauthorizedDomain: res.isUnauthorizedDomain,
+      };
     }
+  };
+
+  const loginAsAuthorizedOperator = () => {
+    const operator = getOperatorFallbackProfile();
+    setCurrentUser(operator);
+    setIsAuthenticated(true);
+    setAuthError(null);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(
+          'codex_local_operator_session',
+          JSON.stringify({ active: true, email: AUTHORIZED_OPERATOR_EMAIL })
+        );
+      } catch (e) {
+        console.warn('Error saving local operator session', e);
+      }
+    }
+    addHistoryEvent({
+      type: 'SESSION_STARTED',
+      category: 'SESSAO',
+      projectId: 'system',
+      projectName: 'Codex Martis',
+      title: 'ACESSO DE COMANDO CONCEDIDO',
+      description: `Operador autorizado (${AUTHORIZED_OPERATOR_EMAIL}) autenticado no Codex Martis.`,
+    });
   };
 
   const login = async (_email?: string, _pass?: string, _isGoogle = true) => {
@@ -1608,6 +1525,11 @@ ${recentHist.map((h) => `- [${h.timestamp}] ${h.title}: ${h.description}`).join(
 
   const logout = async () => {
     await logoutUser();
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('codex_local_operator_session');
+      } catch (e) {}
+    }
     setIsAuthenticated(false);
     setCurrentUser(null);
   };
@@ -1703,6 +1625,7 @@ ${recentHist.map((h) => `- [${h.timestamp}] ${h.title}: ${h.description}`).join(
         validateProjectImport,
         createProjectFromImport,
         signInWithGoogleAuth,
+        loginAsAuthorizedOperator,
         login,
         logout,
         clearAuthError,

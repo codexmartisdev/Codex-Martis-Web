@@ -263,12 +263,150 @@ export interface ProjectUpdate {
   projectId: string;
   projectName: string;
   schemaVersion: string;
+  updateType?: string;
   originalJson: string;
+  rawJson?: string;
   parsedData: any;
   appliedDiff: any;
+  source?: string;
   createdAt: string;
   appliedAt: string;
   summary?: string;
+}
+
+export interface ProjectUpdateSchemaProject {
+  identifier?: string | null;
+  project_status?: 'planejamento' | 'desenvolvimento' | 'teste' | 'producao' | 'pausado' | 'encerrado' | string | null;
+  project_health?: 'saudavel' | 'atencao' | 'bloqueado' | 'nao_avaliado' | string | null;
+  current_phase?: string | null;
+  current_objective?: string | null;
+  progress?: number | null;
+}
+
+export interface ProjectUpdateSchemaSession {
+  summary?: string | null;
+  result?: 'sucesso' | 'sucesso_parcial' | 'sem_alteracoes' | 'falha' | 'indeterminado' | string | null;
+  work_performed?: string[];
+  tests_performed?: string[];
+  tests_result?: string | null;
+}
+
+export interface ProjectUpdateSchemaCompletedTask {
+  task_id?: string | null;
+  title?: string | null;
+  type?: string | null;
+  priority?: string | null;
+  status?: 'concluida' | string | null;
+  description?: string | null;
+}
+
+export interface ProjectUpdateSchemaUpdatedTask {
+  task_id?: string | null;
+  title?: string | null;
+  type?: string | null;
+  priority?: string | null;
+  previous_status?: string | null;
+  status?: string | null;
+  description?: string | null;
+}
+
+export interface ProjectUpdateSchemaNewTask {
+  title: string;
+  type?: string | null;
+  priority?: string | null;
+  status?: 'pendente' | string | null;
+  description?: string | null;
+}
+
+export interface ProjectUpdateSchemaIssue {
+  title: string;
+  severity?: 'critica' | 'alta' | 'media' | 'baixa' | string | null;
+  status?: 'aberto' | 'em_correcao' | 'corrigido_nao_validado' | 'resolvido' | 'aceito' | 'descartado' | string | null;
+  description?: string | null;
+  evidence?: string | null;
+}
+
+export interface ProjectUpdateSchemaResolvedIssue {
+  title: string;
+  severity?: string | null;
+  status?: 'resolvido' | string | null;
+  resolution?: string | null;
+  validation?: string | null;
+}
+
+export interface ProjectUpdateSchemaDecision {
+  title: string;
+  decision?: string | null;
+  reason?: string | null;
+  impact?: string | null;
+}
+
+export interface ProjectUpdateSchemaTechnicalChange {
+  area?: string | null;
+  description?: string | null;
+  status?: string | null;
+}
+
+export interface ProjectUpdateSchemaEnvironmentChange {
+  environment_id?: string | null;
+  service?: string | null;
+  environment?: string | null;
+  change?: string | null;
+  result?: string | null;
+}
+
+export interface ProjectUpdateSchemaRepository {
+  repository_name?: string | null;
+  branch?: string | null;
+  commit?: string | null;
+  commit_message?: string | null;
+  commit_status?: string | null;
+}
+
+export interface ProjectUpdateSchemaDeployment {
+  performed?: boolean | null;
+  platform?: string | null;
+  environment?: string | null;
+  url?: string | null;
+  status?: string | null;
+}
+
+export interface ProjectUpdateSchemaKnownState {
+  working?: string[];
+  partially_working?: string[];
+  not_working?: string[];
+  not_tested?: string[];
+  out_of_scope?: string[];
+}
+
+export interface ProjectUpdateSchemaNextAction {
+  task_id?: string | null;
+  title?: string | null;
+  description?: string | null;
+  priority?: string | null;
+  recommended_tool?: string | null;
+  reason?: string | null;
+}
+
+export interface ProjectUpdateSchema1 {
+  schema_version: '1.0' | string;
+  update_type: 'project_update' | string;
+  project?: ProjectUpdateSchemaProject | null;
+  session?: ProjectUpdateSchemaSession | null;
+  completed_tasks?: ProjectUpdateSchemaCompletedTask[];
+  updated_tasks?: ProjectUpdateSchemaUpdatedTask[];
+  new_tasks?: ProjectUpdateSchemaNewTask[];
+  issues?: ProjectUpdateSchemaIssue[];
+  resolved_issues?: ProjectUpdateSchemaResolvedIssue[];
+  decisions?: ProjectUpdateSchemaDecision[];
+  technical_changes?: ProjectUpdateSchemaTechnicalChange[];
+  environment_changes?: ProjectUpdateSchemaEnvironmentChange[];
+  repository?: ProjectUpdateSchemaRepository | null;
+  deployment?: ProjectUpdateSchemaDeployment | null;
+  known_state?: ProjectUpdateSchemaKnownState | null;
+  next_action?: ProjectUpdateSchemaNextAction | null;
+  recommended_follow_up?: string[];
+  context_summary?: string | null;
 }
 
 export interface PromptTemplate {
@@ -277,6 +415,7 @@ export interface PromptTemplate {
   schema_version: string;
   content: string;
   isDefault: boolean;
+  updatedAt?: string;
 }
 
 export interface UserProfile {
@@ -286,3 +425,6 @@ export interface UserProfile {
   role: string;
   avatarInitials: string;
 }
+
+export type { ProjectUpdateDiff, UpdateValidationResult, TaskMatchResult } from './projectUpdate';
+

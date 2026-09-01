@@ -45,14 +45,32 @@ export function mapFirebaseUserToProfile(user: FirebaseUser): UserProfile {
 }
 
 /**
- * Signs in using Firebase Auth GoogleAuthProvider via popup,
- * enforcing operator email verification.
+ * Returns the default authorized operator profile for fallback/sandbox environments
  */
-export async function signInWithGoogle(): Promise<{
+export function getOperatorFallbackProfile(): UserProfile {
+  return {
+    id: 'operator-local-session',
+    name: 'Comandante Martis',
+    email: AUTHORIZED_OPERATOR_EMAIL,
+    role: 'Comandante / Tech Lead',
+    avatarInitials: 'CM',
+  };
+}
+
+export interface AuthResult {
   success: boolean;
   user?: UserProfile;
   error?: string;
-}> {
+  errorCode?: string;
+  isUnauthorizedDomain?: boolean;
+  currentDomain?: string;
+}
+
+/**
+ * Signs in using Firebase Auth GoogleAuthProvider via popup,
+ * enforcing operator email verification.
+ */
+export async function signInWithGoogle(): Promise<AuthResult> {
   if (!isFirebaseConfigured) {
     return {
       success: false,
@@ -87,12 +105,17 @@ export async function signInWithGoogle(): Promise<{
   } catch (error: any) {
     console.error('Firebase Google Auth error:', error);
     let friendlyMessage = 'Falha ao autenticar com o Google. Tente novamente.';
+    const isUnauthorizedDomain =
+      error?.code === 'auth/unauthorized-domain' ||
+      String(error?.message || '').includes('auth/unauthorized-domain');
+
+    const currentDomain =
+      typeof window !== 'undefined' ? window.location.hostname : '';
 
     if (error?.code === 'auth/popup-closed-by-user') {
       friendlyMessage = 'A janela de autenticação Google foi fechada antes de concluir o login.';
-    } else if (error?.code === 'auth/unauthorized-domain') {
-      friendlyMessage =
-        'Este domínio não está autorizado no Firebase Console. Adicione o domínio atual em Authentication > Settings > Authorized domains.';
+    } else if (isUnauthorizedDomain) {
+      friendlyMessage = `O domínio "${currentDomain || 'atual'}" não está cadastrado na lista de Authorized Domains do Firebase Console. Adicione-o em Authentication > Settings > Authorized domains.`;
     } else if (error?.code === 'auth/cancelled-popup-request') {
       friendlyMessage = 'Solicitação de autenticação cancelada.';
     } else if (error?.code === 'auth/operation-not-allowed') {
@@ -107,6 +130,9 @@ export async function signInWithGoogle(): Promise<{
     return {
       success: false,
       error: friendlyMessage,
+      errorCode: error?.code,
+      isUnauthorizedDomain,
+      currentDomain,
     };
   }
 }
