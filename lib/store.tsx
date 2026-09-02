@@ -1394,18 +1394,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const otherTasks = tasks.filter((t) => t.projectId !== projectId);
     const otherEnvs = environments.filter((e) => e.projectId !== projectId);
 
+    const parsedData = (diff as any).parsedData || diff || {};
+
     const result = applyProjectUpdatePatch(
       project,
       projectTasks,
       projectEnvs,
       currentUser,
-      (diff as any).parsedData || {},
+      parsedData,
       diff,
       rawJsonString
     );
 
-    // 1. Update Project
-    updateProject(projectId, result.updatedProject);
+    // 1. Update Project atomically with all patched fields
+    const now = new Date().toISOString();
+    setProjects((prev) =>
+      prev.map((p) => (p.id === projectId ? { ...result.updatedProject, updatedAt: now } : p))
+    );
 
     // 2. Update Tasks
     setTasks([...result.updatedTasks, ...otherTasks]);

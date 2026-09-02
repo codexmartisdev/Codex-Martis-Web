@@ -85,6 +85,7 @@ export interface ProjectUpdateDiff {
     currentTaskId: string | null;
     newTitle: string;
     newTaskId: string | null;
+    new?: string; // UI alias
     whyImportant?: string | null;
     recommendedTool?: string | null;
     changed: boolean;
@@ -93,9 +94,13 @@ export interface ProjectUpdateDiff {
 
   // Task Operations
   completedTasksMatches: TaskMatchResult[];
+  completedTasks?: Array<{ title: string; matchedTaskId?: string | null }>;
   updatedTasksMatches: TaskMatchResult[];
+  updatedTasks?: Array<{ title: string; matchedTaskId?: string | null; changes: Record<string, string> }>;
   newTasksToCreate: ProjectUpdateSchemaNewTask[];
+  newTasks?: ProjectUpdateSchemaNewTask[];
   issuesToCreate: ProjectUpdateSchemaIssue[];
+  issues?: ProjectUpdateSchemaIssue[];
   resolvedIssues: ProjectUpdateSchemaResolvedIssue[];
 
   // Decisions & Tech Changes
@@ -113,7 +118,9 @@ export interface ProjectUpdateDiff {
 
   // Repository & Deployment
   repository?: ProjectUpdateSchemaRepository | null;
+  commit?: { hash: string; message?: string } | null;
   deployment?: ProjectUpdateSchemaDeployment | null;
+  deploy?: ProjectUpdateSchemaDeployment | null;
 
   // Known State & Context
   knownState?: {
@@ -129,9 +136,10 @@ export interface ProjectUpdateDiff {
   sessionData?: ProjectUpdateSchemaSession | null;
   recommendedFollowUp?: string[];
 
-  // Metadata
+  // Metadata & Parsed Data
   rawJsonString: string;
   hasRemovedSecrets?: boolean;
+  parsedData?: any;
 }
 
 export interface UpdateValidationResult {
@@ -197,141 +205,10 @@ function sanitizeSecrets(obj: any): { sanitized: any; removedCount: number } {
   return { sanitized, removedCount };
 }
 
-// Valid Enums
-const VALID_PROJECT_STATUSES: ProjectStatus[] = [
-  'planejamento',
-  'desenvolvimento',
-  'teste',
-  'producao',
-  'pausado',
-  'encerrado',
-];
-
-const VALID_PROJECT_HEALTHS: ProjectHealth[] = [
-  'saudavel',
-  'atencao',
-  'bloqueado',
-  'nao_avaliado',
-];
-
-const VALID_SESSION_RESULTS = [
-  'sucesso',
-  'sucesso_parcial',
-  'sem_alteracoes',
-  'falha',
-  'indeterminado',
-];
-
-const VALID_TASK_STATUSES = [
-  'pendente',
-  'em_andamento',
-  'executada_nao_validada',
-  'concluida',
-  'cancelada',
-];
-
-const VALID_TASK_TYPES = [
-  'bug',
-  'melhoria',
-  'feature',
-  'auditoria',
-  'infraestrutura',
-  'teste',
-  'documentacao',
-  'ideia',
-  'outro',
-];
-
-const VALID_PRIORITIES = ['critica', 'alta', 'media', 'baixa'];
-
-const VALID_ISSUE_STATUSES = [
-  'aberto',
-  'em_correcao',
-  'corrigido_nao_validado',
-  'resolvido',
-  'aceito',
-  'descartado',
-];
-
 /**
- * Maps schema task status to Codex Martis TaskStatus
+ * Normalized string matching helper (accent and case insensitive)
  */
-export function mapSchemaTaskStatus(status?: string | null): TaskStatus {
-  if (!status) return 'Pendente';
-  const s = status.toLowerCase().trim().replace(/ /g, '_');
-  switch (s) {
-    case 'concluida':
-    case 'concluída':
-      return 'Concluída';
-    case 'em_andamento':
-    case 'em andamento':
-      return 'Em andamento';
-    case 'executada_nao_validada':
-    case 'executada não validada':
-      return 'Executada não validada';
-    case 'cancelada':
-      return 'Cancelada';
-    case 'pendente':
-    default:
-      return 'Pendente';
-  }
-}
-
-/**
- * Maps schema task type to Codex Martis TaskType
- */
-export function mapSchemaTaskType(type?: string | null): TaskType {
-  if (!type) return 'Melhoria';
-  const t = type.toLowerCase().trim();
-  switch (t) {
-    case 'bug':
-      return 'Bug';
-    case 'feature':
-      return 'Feature';
-    case 'auditoria':
-      return 'Auditoria';
-    case 'infraestrutura':
-      return 'Infraestrutura';
-    case 'teste':
-      return 'Teste';
-    case 'documentacao':
-    case 'documentação':
-      return 'Documentação';
-    case 'ideia':
-      return 'Ideia';
-    case 'outro':
-      return 'Outro';
-    case 'melhoria':
-    default:
-      return 'Melhoria';
-  }
-}
-
-/**
- * Maps schema priority / severity to Codex Martis TaskPriority
- */
-export function mapSchemaPriority(p?: string | null): TaskPriority {
-  if (!p) return 'Média';
-  const norm = p.toLowerCase().trim();
-  switch (norm) {
-    case 'critica':
-    case 'crítica':
-      return 'Crítica';
-    case 'alta':
-      return 'Alta';
-    case 'baixa':
-      return 'Baixa';
-    case 'media':
-    case 'média':
-    default:
-      return 'Média';
-  }
-}
-
-/**
- * Normalized string matching helper
- */
-function normalizeString(str: string): string {
+export function normalizeString(str: string): string {
   return str
     .toLowerCase()
     .normalize('NFD')
@@ -339,11 +216,439 @@ function normalizeString(str: string): string {
     .trim();
 }
 
+export function normalizeEnumString(str?: string | null): string {
+  if (!str) return '';
+  return normalizeString(str).replace(/[\s-]+/g, '_');
+}
+
+/**
+ * Maps project health from any variation
+ */
+export function normalizeProjectHealth(h?: string | null): ProjectHealth | undefined {
+  if (!h) return undefined;
+  const n = normalizeEnumString(h);
+  if (n.includes('saudavel') || n === 'ok' || n === 'verde' || n === 'healthy') return 'saudavel';
+  if (n.includes('atencao') || n.includes('warning') || n === 'amarelo' || n === 'caution') return 'atencao';
+  if (n.includes('bloqueado') || n.includes('blocked') || n.includes('erro') || n === 'vermelho' || n.includes('critico')) return 'bloqueado';
+  if (n.includes('nao_avaliado') || n.includes('unassessed') || n.includes('desconhecido')) return 'nao_avaliado';
+  return undefined;
+}
+
+/**
+ * Maps project status from any variation
+ */
+export function normalizeProjectStatus(s?: string | null): ProjectStatus | undefined {
+  if (!s) return undefined;
+  const n = normalizeEnumString(s);
+  if (n.includes('planejamento') || n.includes('planning') || n.includes('iniciando')) return 'planejamento';
+  if (n.includes('desenvolvimento') || n.includes('development') || n.includes('andamento') || n.includes('dev')) return 'desenvolvimento';
+  if (n.includes('teste') || n.includes('qa') || n.includes('homologacao') || n.includes('staging')) return 'teste';
+  if (n.includes('producao') || n.includes('production') || n.includes('prd') || n.includes('live') || n.includes('ativo')) return 'producao';
+  if (n.includes('pausado') || n.includes('paused') || n.includes('hold') || n.includes('espera')) return 'pausado';
+  if (n.includes('encerrado') || n.includes('arquivado') || n.includes('closed') || n.includes('finalizado')) return 'encerrado';
+  return undefined;
+}
+
+/**
+ * Maps schema task status to Codex Martis TaskStatus
+ */
+export function mapSchemaTaskStatus(status?: string | null): TaskStatus {
+  if (!status) return 'Pendente';
+  const s = normalizeEnumString(status);
+  if (s.includes('concluid') || s === 'done' || s === 'completed' || s === 'finalizada') return 'Concluída';
+  if (s.includes('executada') || s.includes('unvalidated') || s.includes('aguardando_validacao')) return 'Executada não validada';
+  if (s.includes('andamento') || s.includes('progress') || s === 'doing' || s === 'executando') return 'Em andamento';
+  if (s.includes('cancelad') || s === 'cancelled') return 'Cancelada';
+  return 'Pendente';
+}
+
+/**
+ * Maps schema task type to Codex Martis TaskType
+ */
+export function mapSchemaTaskType(type?: string | null): TaskType {
+  if (!type) return 'Melhoria';
+  const t = normalizeEnumString(type);
+  if (t.includes('bug') || t.includes('erro') || t.includes('fix') || t.includes('correcao')) return 'Bug';
+  if (t.includes('feature') || t.includes('recurso') || t.includes('funcionalidade')) return 'Feature';
+  if (t.includes('auditoria') || t.includes('audit') || t.includes('revisao')) return 'Auditoria';
+  if (t.includes('infra') || t.includes('banco') || t.includes('cloud') || t.includes('deploy') || t.includes('devops')) return 'Infraestrutura';
+  if (t.includes('test') || t.includes('qa')) return 'Teste';
+  if (t.includes('doc') || t.includes('documentacao')) return 'Documentação';
+  if (t.includes('ideia') || t.includes('idea')) return 'Ideia';
+  if (t.includes('outro') || t.includes('other')) return 'Outro';
+  return 'Melhoria';
+}
+
+/**
+ * Maps schema priority / severity to Codex Martis TaskPriority
+ */
+export function mapSchemaPriority(p?: string | null): TaskPriority {
+  if (!p) return 'Média';
+  const norm = normalizeEnumString(p);
+  if (norm.includes('critica') || norm.includes('urgente') || norm.includes('blocker') || norm.includes('imediata')) return 'Crítica';
+  if (norm.includes('alta') || norm.includes('high')) return 'Alta';
+  if (norm.includes('baixa') || norm.includes('low')) return 'Baixa';
+  return 'Média';
+}
+
+/**
+ * Normalizes any raw JSON object into canonical ProjectUpdateSchema1
+ */
+export function normalizeProjectUpdateData(raw: any): ProjectUpdateSchema1 {
+  if (!raw || typeof raw !== 'object') {
+    return { schema_version: '1.0', update_type: 'project_update' };
+  }
+
+  const projRaw = raw.project || {};
+
+  // Health
+  const rawHealth = projRaw.project_health || projRaw.health || raw.project_health || raw.health || raw.status_health;
+  const project_health = normalizeProjectHealth(rawHealth) || undefined;
+
+  // Status
+  const rawStatus = projRaw.project_status || projRaw.status || raw.project_status || raw.status;
+  const project_status = normalizeProjectStatus(rawStatus) || undefined;
+
+  // Phase
+  const current_phase = projRaw.current_phase || projRaw.phase || raw.current_phase || raw.phase || undefined;
+
+  // Progress
+  let progress: number | undefined = undefined;
+  const rawProg = projRaw.progress !== undefined ? projRaw.progress : (raw.progress !== undefined ? raw.progress : raw.project_progress);
+  if (rawProg !== undefined && rawProg !== null && rawProg !== '') {
+    const pNum = Number(rawProg);
+    if (!isNaN(pNum)) {
+      progress = Math.max(0, Math.min(100, Math.round(pNum)));
+    }
+  }
+
+  // Objective / Status Summary
+  const current_objective =
+    projRaw.current_objective ||
+    projRaw.objective ||
+    raw.current_objective ||
+    raw.objective ||
+    raw.status_summary ||
+    raw.summary ||
+    undefined;
+
+  // Identifier / Project ID
+  const identifier =
+    projRaw.identifier ||
+    projRaw.id ||
+    raw.project_identifier ||
+    raw.project_id ||
+    raw.identifier ||
+    raw.id ||
+    undefined;
+
+  // Next Mission / Next Action
+  const nextRaw = raw.next_action || raw.next_mission || raw.next_task || raw.nextAction || raw.nextMission || raw.nextTask;
+  let next_action: ProjectUpdateSchemaNextAction | undefined = undefined;
+  if (typeof nextRaw === 'string' && nextRaw.trim()) {
+    next_action = { title: nextRaw.trim() };
+  } else if (nextRaw && typeof nextRaw === 'object') {
+    next_action = {
+      task_id: nextRaw.task_id || nextRaw.id || undefined,
+      title: nextRaw.title || nextRaw.name || undefined,
+      description: nextRaw.description || nextRaw.why_important || nextRaw.reason || undefined,
+      reason: nextRaw.why_important || nextRaw.reason || nextRaw.description || undefined,
+      recommended_tool: nextRaw.recommended_tool || nextRaw.tool || undefined,
+      priority: nextRaw.priority || undefined,
+    };
+  }
+
+  // Completed Tasks
+  const completed_tasks: ProjectUpdateSchemaCompletedTask[] = [];
+  const rawCompleted = raw.completed_tasks || raw.completedTasks || raw.done_tasks;
+  if (Array.isArray(rawCompleted)) {
+    for (const ct of rawCompleted) {
+      if (typeof ct === 'string' && ct.trim()) {
+        completed_tasks.push({ title: ct.trim(), status: 'concluida' });
+      } else if (ct && typeof ct === 'object') {
+        const title = ct.title || ct.name || ct.task_title;
+        if (title || ct.task_id || ct.id) {
+          completed_tasks.push({
+            task_id: ct.task_id || ct.id || null,
+            title: title || null,
+            type: ct.type || null,
+            priority: ct.priority || null,
+            status: 'concluida',
+            description: ct.description || null,
+          });
+        }
+      }
+    }
+  }
+
+  // Updated Tasks
+  const updated_tasks: ProjectUpdateSchemaUpdatedTask[] = [];
+  const rawUpdated = raw.updated_tasks || raw.updatedTasks;
+  if (Array.isArray(rawUpdated)) {
+    for (const ut of rawUpdated) {
+      if (typeof ut === 'string' && ut.trim()) {
+        updated_tasks.push({ title: ut.trim() });
+      } else if (ut && typeof ut === 'object') {
+        const title = ut.title || ut.name;
+        if (title || ut.task_id || ut.id) {
+          updated_tasks.push({
+            task_id: ut.task_id || ut.id || null,
+            title: title || null,
+            type: ut.type || null,
+            priority: ut.priority || null,
+            previous_status: ut.previous_status || null,
+            status: ut.status || null,
+            description: ut.description || null,
+          });
+        }
+      }
+    }
+  }
+
+  // New Tasks
+  const new_tasks: ProjectUpdateSchemaNewTask[] = [];
+  const rawNew = raw.new_tasks || raw.newTasks || raw.created_tasks;
+  if (Array.isArray(rawNew)) {
+    for (const nt of rawNew) {
+      if (typeof nt === 'string' && nt.trim()) {
+        new_tasks.push({ title: nt.trim(), type: 'Feature', priority: 'Alta', status: 'pendente' });
+      } else if (nt && typeof nt === 'object') {
+        const title = nt.title || nt.name;
+        if (title && String(title).trim()) {
+          new_tasks.push({
+            title: String(title).trim(),
+            type: nt.type || 'Feature',
+            priority: nt.priority || 'Alta',
+            status: nt.status || 'pendente',
+            description: nt.description || '',
+          });
+        }
+      }
+    }
+  }
+
+  // Issues
+  const issues: ProjectUpdateSchemaIssue[] = [];
+  const rawIssues = raw.issues || raw.problems || raw.bugs || raw.risks;
+  if (Array.isArray(rawIssues)) {
+    for (const is of rawIssues) {
+      if (typeof is === 'string' && is.trim()) {
+        issues.push({ title: is.trim(), severity: 'media', status: 'aberto' });
+      } else if (is && typeof is === 'object') {
+        const title = is.title || is.name || is.description;
+        if (title && String(title).trim()) {
+          issues.push({
+            title: String(title).trim(),
+            severity: is.severity || is.priority || 'media',
+            status: is.status || 'aberto',
+            description: is.description || '',
+            evidence: is.evidence || '',
+          });
+        }
+      }
+    }
+  }
+
+  // Resolved Issues
+  const resolved_issues: ProjectUpdateSchemaResolvedIssue[] = [];
+  const rawResolved = raw.resolved_issues || raw.resolvedIssues || raw.fixed_issues;
+  if (Array.isArray(rawResolved)) {
+    for (const ri of rawResolved) {
+      if (typeof ri === 'string' && ri.trim()) {
+        resolved_issues.push({ title: ri.trim(), status: 'resolvido' });
+      } else if (ri && typeof ri === 'object') {
+        const title = ri.title || ri.name;
+        if (title && String(title).trim()) {
+          resolved_issues.push({
+            title: String(title).trim(),
+            severity: ri.severity || 'media',
+            status: 'resolvido',
+            resolution: ri.resolution || ri.solution || '',
+            validation: ri.validation || '',
+          });
+        }
+      }
+    }
+  }
+
+  // Decisions
+  const decisions: ProjectUpdateSchemaDecision[] = [];
+  const rawDecisions = raw.decisions || raw.strategic_decisions;
+  if (Array.isArray(rawDecisions)) {
+    for (const dec of rawDecisions) {
+      if (typeof dec === 'string' && dec.trim()) {
+        decisions.push({ title: dec.trim(), decision: dec.trim() });
+      } else if (dec && typeof dec === 'object') {
+        const title = dec.title || dec.decision || dec.name;
+        if (title && String(title).trim()) {
+          decisions.push({
+            title: String(title).trim(),
+            decision: dec.decision || dec.title || '',
+            reason: dec.reason || dec.why || '',
+            impact: dec.impact || '',
+          });
+        }
+      }
+    }
+  }
+
+  // Technical Changes (Support both Array and Object format)
+  const technical_changes: ProjectUpdateSchemaTechnicalChange[] = [];
+  const rawTech = raw.technical_changes || raw.technicalChanges;
+  if (Array.isArray(rawTech)) {
+    for (const tc of rawTech) {
+      if (typeof tc === 'string' && tc.trim()) {
+        technical_changes.push({ area: 'Geral', description: tc.trim(), status: 'aplicado' });
+      } else if (tc && typeof tc === 'object') {
+        technical_changes.push({
+          area: tc.area || tc.category || tc.scope || 'Código',
+          description: tc.description || tc.details || tc.change || '',
+          status: tc.status || 'aplicado',
+        });
+      }
+    }
+  } else if (rawTech && typeof rawTech === 'object') {
+    if (Array.isArray(rawTech.modified_files) && rawTech.modified_files.length > 0) {
+      technical_changes.push({
+        area: 'Arquivos Modificados',
+        description: rawTech.modified_files.join(', '),
+        status: 'aplicado',
+      });
+    }
+    if (Array.isArray(rawTech.added_libraries) && rawTech.added_libraries.length > 0) {
+      technical_changes.push({
+        area: 'Bibliotecas Adicionadas',
+        description: rawTech.added_libraries.join(', '),
+        status: 'aplicado',
+      });
+    }
+    if (Array.isArray(rawTech.configuration_changes) && rawTech.configuration_changes.length > 0) {
+      technical_changes.push({
+        area: 'Configurações',
+        description: rawTech.configuration_changes.join(', '),
+        status: 'aplicado',
+      });
+    }
+  }
+
+  // Environments / Environment Changes
+  const environment_changes: ProjectUpdateSchemaEnvironmentChange[] = [];
+  const rawEnvs = raw.environment_changes || raw.environments || raw.environmentChanges;
+  if (Array.isArray(rawEnvs)) {
+    for (const ec of rawEnvs) {
+      if (typeof ec === 'string' && ec.trim()) {
+        environment_changes.push({ change: ec.trim(), result: 'OK' });
+      } else if (ec && typeof ec === 'object') {
+        environment_changes.push({
+          environment_id: ec.environment_id || ec.identifier || ec.id || null,
+          service: ec.service || ec.name || null,
+          environment: ec.environment || ec.status || null,
+          change: ec.change || ec.observations || ec.details || null,
+          result: ec.result || ec.status || 'OK',
+        });
+      }
+    }
+  }
+
+  // Repository
+  let repository: ProjectUpdateSchemaRepository | undefined = undefined;
+  const rawRepo = raw.repository || raw.repo || raw.git;
+  if (rawRepo && typeof rawRepo === 'object') {
+    repository = {
+      repository_name: rawRepo.repository_name || rawRepo.name || null,
+      branch: rawRepo.branch || null,
+      commit: rawRepo.commit || rawRepo.hash || rawRepo.commitHash || null,
+      commit_message: rawRepo.commit_message || rawRepo.message || null,
+      commit_status: rawRepo.commit_status || null,
+    };
+  }
+
+  // Deployment
+  let deployment: ProjectUpdateSchemaDeployment | undefined = undefined;
+  const rawDep = raw.deployment || raw.deploy;
+  if (rawDep && typeof rawDep === 'object') {
+    deployment = {
+      performed: Boolean(rawDep.performed !== false && (rawDep.url || rawDep.environment || rawDep.platform || rawDep.performed === true)),
+      platform: rawDep.platform || null,
+      environment: rawDep.environment || null,
+      url: rawDep.url || null,
+      status: rawDep.status || null,
+    };
+  }
+
+  // Known State / State Photo
+  let known_state: ProjectUpdateSchemaKnownState | undefined = undefined;
+  const rawKS = raw.known_state || raw.knownState || raw.state_photo || raw.statePhoto;
+  if (rawKS && typeof rawKS === 'object') {
+    known_state = {
+      working: Array.isArray(rawKS.working) ? rawKS.working : [],
+      partially_working: Array.isArray(rawKS.partially_working) ? rawKS.partially_working : (Array.isArray(rawKS.partiallyWorking) ? rawKS.partiallyWorking : []),
+      not_working: Array.isArray(rawKS.not_working) ? rawKS.not_working : (Array.isArray(rawKS.notWorking) ? rawKS.notWorking : []),
+      not_tested: Array.isArray(rawKS.not_tested) ? rawKS.not_tested : (Array.isArray(rawKS.untested) ? rawKS.untested : []),
+      out_of_scope: Array.isArray(rawKS.out_of_scope) ? rawKS.out_of_scope : (Array.isArray(rawKS.outOfScope) ? rawKS.outOfScope : []),
+    };
+  }
+
+  // Session
+  let session: ProjectUpdateSchemaSession | undefined = undefined;
+  const rawSess = raw.session || raw.session_summary || raw.sessionSummary;
+  if (rawSess && typeof rawSess === 'object') {
+    session = {
+      summary: rawSess.summary || rawSess.objective || raw.status_summary || null,
+      result: rawSess.result || 'sucesso',
+      work_performed: Array.isArray(rawSess.work_performed) ? rawSess.work_performed : (Array.isArray(rawSess.work_done) ? rawSess.work_done : []),
+      tests_performed: Array.isArray(rawSess.tests_performed) ? rawSess.tests_performed : [],
+      tests_result: rawSess.tests_result || null,
+    };
+  } else if (raw.status_summary || raw.summary) {
+    session = {
+      summary: raw.status_summary || raw.summary,
+      result: 'sucesso',
+      work_performed: [],
+      tests_performed: [],
+    };
+  }
+
+  // Context Summary
+  const context_summary = raw.context_summary || raw.contextSummary || raw.summary || undefined;
+
+  // Recommended follow up
+  const recommended_follow_up = Array.isArray(raw.recommended_follow_up) ? raw.recommended_follow_up : [];
+
+  return {
+    schema_version: '1.0',
+    update_type: 'project_update',
+    project: {
+      identifier: identifier || null,
+      project_status: (project_status as any) || null,
+      project_health: (project_health as any) || null,
+      current_phase: current_phase || null,
+      current_objective: current_objective || null,
+      progress: progress !== undefined ? progress : null,
+    },
+    session: session || null,
+    completed_tasks,
+    updated_tasks,
+    new_tasks,
+    issues,
+    resolved_issues,
+    decisions,
+    technical_changes,
+    environment_changes,
+    repository: repository || null,
+    deployment: deployment || null,
+    known_state: known_state || null,
+    next_action: next_action || null,
+    recommended_follow_up,
+    context_summary: context_summary || null,
+  };
+}
+
 /**
  * Task matching algorithm:
  * 1. task_id exact match
- * 2. exact title
- * 3. normalized title
+ * 2. exact title match
+ * 3. normalized title match
  */
 export function matchTaskInProject(
   providedTaskId: string | null | undefined,
@@ -416,43 +721,34 @@ export function validateProjectUpdateJson(
       return { success: false, error: 'O JSON fornecido deve ser um objeto JSON válido.' };
     }
 
-    // Check for schema_version
-    if (!parsedRaw.schema_version) {
-      return { success: false, error: 'Schema incompatível: O campo "schema_version" é obrigatório.' };
-    }
-
-    if (parsedRaw.schema_version !== '1.0') {
+    // Validate update_type if explicit project_creation
+    if (parsedRaw.update_type === 'project_creation' || parsedRaw.import_type === 'project_creation') {
       return {
         success: false,
-        error: `Schema incompatível: Versão "${parsedRaw.schema_version}" não suportada. Esperado: "1.0".`,
-      };
-    }
-
-    // Check update_type
-    if (parsedRaw.update_type && parsedRaw.update_type !== 'project_update') {
-      if (parsedRaw.update_type === 'project_creation' || parsedRaw.import_type === 'project_creation') {
-        return {
-          success: false,
-          error: 'Este JSON pertence ao fluxo de criação inicial de projeto (Project Import), não ao de atualização (Project Update).',
-        };
-      }
-      return {
-        success: false,
-        error: 'Este JSON não é um Project Update. O campo "update_type" deve ser "project_update".',
+        error: 'Este JSON pertence ao fluxo de criação inicial de projeto (Project Import), não ao de atualização (Project Update).',
       };
     }
 
     // Sanitize any secrets
     const { sanitized, removedCount } = sanitizeSecrets(parsedRaw);
-    const parsedData: ProjectUpdateSchema1 = sanitized;
+
+    // Normalize full payload to standard Schema 1.0
+    const parsedData: ProjectUpdateSchema1 = normalizeProjectUpdateData(sanitized);
 
     // Check project identifier matching if supplied
     if (parsedData.project?.identifier) {
-      const pIdent = parsedData.project.identifier.trim().toLowerCase();
-      const curIdent = (currentProject.identifier || '').trim().toLowerCase();
-      const curId = currentProject.id.trim().toLowerCase();
+      const pIdent = normalizeString(parsedData.project.identifier);
+      const curIdent = normalizeString(currentProject.identifier || '');
+      const curId = normalizeString(currentProject.id);
+      const curName = normalizeString(currentProject.name);
 
-      if (pIdent && pIdent !== curIdent && pIdent !== curId) {
+      if (
+        pIdent &&
+        pIdent !== curIdent &&
+        pIdent !== curId &&
+        !curIdent.includes(pIdent) &&
+        !curName.includes(pIdent)
+      ) {
         return {
           success: false,
           error: `O identificador informado ("${parsedData.project.identifier}") não corresponde ao projeto atual ("${currentProject.name}" - ${currentProject.identifier}).`,
@@ -460,119 +756,7 @@ export function validateProjectUpdateJson(
       }
     }
 
-    // Validate Enums if supplied
-    if (parsedData.project?.project_status) {
-      const st = parsedData.project.project_status.toLowerCase().trim();
-      if (!VALID_PROJECT_STATUSES.includes(st as any)) {
-        return {
-          success: false,
-          error: `Valor inválido para project_status: "${parsedData.project.project_status}". Valores permitidos: ${VALID_PROJECT_STATUSES.join(', ')}.`,
-        };
-      }
-    }
-
-    if (parsedData.project?.project_health) {
-      const hl = parsedData.project.project_health.toLowerCase().trim();
-      if (!VALID_PROJECT_HEALTHS.includes(hl as any)) {
-        return {
-          success: false,
-          error: `Valor inválido para project_health: "${parsedData.project.project_health}". Valores permitidos: ${VALID_PROJECT_HEALTHS.join(', ')}.`,
-        };
-      }
-    }
-
-    if (parsedData.session?.result) {
-      const sr = parsedData.session.result.toLowerCase().trim();
-      if (!VALID_SESSION_RESULTS.includes(sr)) {
-        return {
-          success: false,
-          error: `Valor inválido para session.result: "${parsedData.session.result}". Valores permitidos: ${VALID_SESSION_RESULTS.join(', ')}.`,
-        };
-      }
-    }
-
-    // Validate progress range if supplied
-    if (parsedData.project?.progress !== undefined && parsedData.project?.progress !== null) {
-      const prog = Number(parsedData.project.progress);
-      if (isNaN(prog) || prog < 0 || prog > 100) {
-        return {
-          success: false,
-          error: 'Valor inválido para progress: deve ser um número entre 0 e 100.',
-        };
-      }
-    }
-
-    // Validate tasks enums
-    if (Array.isArray(parsedData.updated_tasks)) {
-      for (const ut of parsedData.updated_tasks) {
-        if (ut.status && !VALID_TASK_STATUSES.includes(ut.status.toLowerCase().replace(/ /g, '_'))) {
-          return {
-            success: false,
-            error: `Valor inválido para task.status em updated_tasks: "${ut.status}".`,
-          };
-        }
-        if (ut.type && !VALID_TASK_TYPES.includes(ut.type.toLowerCase())) {
-          return {
-            success: false,
-            error: `Valor inválido para task.type em updated_tasks: "${ut.type}".`,
-          };
-        }
-        if (ut.priority && !VALID_PRIORITIES.includes(ut.priority.toLowerCase())) {
-          return {
-            success: false,
-            error: `Valor inválido para priority em updated_tasks: "${ut.priority}".`,
-          };
-        }
-      }
-    }
-
-    if (Array.isArray(parsedData.new_tasks)) {
-      for (const nt of parsedData.new_tasks) {
-        if (!nt.title || !nt.title.trim()) {
-          return {
-            success: false,
-            error: 'Cada item em new_tasks deve conter obrigatoriamente um "title".',
-          };
-        }
-        if (nt.type && !VALID_TASK_TYPES.includes(nt.type.toLowerCase())) {
-          return {
-            success: false,
-            error: `Valor inválido para task.type em new_tasks: "${nt.type}".`,
-          };
-        }
-        if (nt.priority && !VALID_PRIORITIES.includes(nt.priority.toLowerCase())) {
-          return {
-            success: false,
-            error: `Valor inválido para priority em new_tasks: "${nt.priority}".`,
-          };
-        }
-      }
-    }
-
-    if (Array.isArray(parsedData.issues)) {
-      for (const is of parsedData.issues) {
-        if (!is.title || !is.title.trim()) {
-          return {
-            success: false,
-            error: 'Cada item em issues deve conter obrigatoriamente um "title".',
-          };
-        }
-        if (is.severity && !VALID_PRIORITIES.includes(is.severity.toLowerCase())) {
-          return {
-            success: false,
-            error: `Valor inválido para severity em issues: "${is.severity}".`,
-          };
-        }
-        if (is.status && !VALID_ISSUE_STATUSES.includes(is.status.toLowerCase())) {
-          return {
-            success: false,
-            error: `Valor inválido para status em issues: "${is.status}".`,
-          };
-        }
-      }
-    }
-
-    // Build comprehensive Diff object for preview without applying any changes
+    // Build comprehensive Diff object for preview
     const diff = buildProjectUpdateDiff(
       currentProject,
       projectTasks,
@@ -581,6 +765,8 @@ export function validateProjectUpdateJson(
       clean,
       removedCount > 0
     );
+
+    diff.parsedData = parsedData;
 
     return {
       success: true,
@@ -607,13 +793,13 @@ export function buildProjectUpdateDiff(
 ): ProjectUpdateDiff {
   // 1. Health Diff
   const newHealth = data.project?.project_health
-    ? (data.project.project_health.toLowerCase() as ProjectHealth)
+    ? (data.project.project_health as ProjectHealth)
     : project.health;
   const healthChanged = Boolean(data.project?.project_health && newHealth !== project.health);
 
   // 2. Status Diff
   const newStatus = data.project?.project_status
-    ? (data.project.project_status.toLowerCase() as ProjectStatus)
+    ? (data.project.project_status as ProjectStatus)
     : project.status;
   const statusChanged = Boolean(data.project?.project_status && newStatus !== project.status);
 
@@ -641,7 +827,7 @@ export function buildProjectUpdateDiff(
   );
 
   // 6. Next Mission Diff & Resolution
-  let currentMissionTask = project.nextTaskId
+  const currentMissionTask = project.nextTaskId
     ? tasks.find((t) => t.id === project.nextTaskId)
     : null;
   const currentMissionTitle = currentMissionTask
@@ -649,167 +835,177 @@ export function buildProjectUpdateDiff(
     : project.nextTaskTitle || 'Nenhuma missão definida';
 
   let nextMissionTitle = currentMissionTitle;
-  let nextMissionTaskId = project.nextTaskId;
+  let nextMissionTaskId: string | null = project.nextTaskId || null;
   let nextMissionChanged = false;
-  let nextMissionResolutionSource: ProjectUpdateDiff['nextMission']['resolutionSource'] = 'unchanged';
+  let nextMissionResolutionSource:
+    | 'task_id'
+    | 'existing_task_match'
+    | 'new_task_match'
+    | 'created_new_task'
+    | 'unchanged' = 'unchanged';
 
-  const na = data.next_action;
-  if (na && typeof na.title === 'string' && na.title.trim()) {
-    const naTitle = na.title.trim();
-    nextMissionTitle = naTitle;
-    nextMissionChanged = nextMissionTitle !== currentMissionTitle;
+  if (data.next_action?.title || data.next_action?.task_id) {
+    const reqTitle = data.next_action.title ? data.next_action.title.trim() : '';
+    const reqId = data.next_action.task_id ? data.next_action.task_id.trim() : null;
 
-    // Resolve target task in order:
-    // 1. next_action.task_id
-    if (na.task_id) {
-      const byId = tasks.find((t) => t.id === na.task_id);
-      if (byId) {
-        nextMissionTaskId = byId.id;
+    if (reqId) {
+      const match = tasks.find((t) => t.id.toLowerCase() === reqId.toLowerCase());
+      if (match) {
+        nextMissionTaskId = match.id;
+        nextMissionTitle = reqTitle || match.title;
         nextMissionResolutionSource = 'task_id';
+        nextMissionChanged = nextMissionTaskId !== project.nextTaskId;
       }
     }
 
-    // 2. Task with matching title
-    if (!nextMissionTaskId || nextMissionResolutionSource === 'unchanged') {
-      const match = matchTaskInProject(null, naTitle, tasks);
-      if (match.matched) {
-        nextMissionTaskId = match.matched.id;
+    if (!nextMissionChanged && reqTitle) {
+      const titleMatch = matchTaskInProject(null, reqTitle, tasks);
+      if (titleMatch.matched) {
+        nextMissionTaskId = titleMatch.matched.id;
+        nextMissionTitle = titleMatch.matched.title;
         nextMissionResolutionSource = 'existing_task_match';
+        nextMissionChanged =
+          nextMissionTaskId !== project.nextTaskId ||
+          normalizeString(nextMissionTitle) !== normalizeString(currentMissionTitle);
+      } else {
+        const inNewTasks = (data.new_tasks || []).find(
+          (nt) => normalizeString(nt.title) === normalizeString(reqTitle)
+        );
+        if (inNewTasks) {
+          nextMissionTaskId = null;
+          nextMissionTitle = inNewTasks.title;
+          nextMissionResolutionSource = 'new_task_match';
+          nextMissionChanged = true;
+        } else {
+          nextMissionTaskId = null;
+          nextMissionTitle = reqTitle;
+          nextMissionResolutionSource = 'created_new_task';
+          nextMissionChanged = true;
+        }
       }
-    }
-
-    // 3. Match in new_tasks list
-    if (nextMissionResolutionSource === 'unchanged' && Array.isArray(data.new_tasks)) {
-      const foundInNew = data.new_tasks.find(
-        (nt) => normalizeString(nt.title) === normalizeString(naTitle)
-      );
-      if (foundInNew) {
-        nextMissionResolutionSource = 'new_task_match';
-      }
-    }
-
-    // 4. Fallback create new task
-    if (nextMissionResolutionSource === 'unchanged' && nextMissionChanged) {
-      nextMissionResolutionSource = 'created_new_task';
     }
   }
 
-  // 7. Completed Tasks Matching
+  // 7. Completed Tasks Diff
   const completedTasksMatches: TaskMatchResult[] = [];
+  const completedTasksSummary: Array<{ title: string; matchedTaskId?: string | null }> = [];
+
   if (Array.isArray(data.completed_tasks)) {
     for (const ct of data.completed_tasks) {
       const match = matchTaskInProject(ct.task_id, ct.title, tasks);
-      completedTasksMatches.push({
-        providedTitle: ct.title,
-        providedTaskId: ct.task_id,
-        matchedTask: match.matched,
-        isAmbiguous: match.isAmbiguous,
-        ambiguousCandidates: match.candidates,
-        action: match.matched ? 'complete' : 'unmatched',
-        fieldChanges: match.matched
-          ? {
-              status: { from: match.matched.status, to: 'Concluída' },
-            }
-          : undefined,
-      });
+      if (match.matched) {
+        completedTasksMatches.push({
+          providedTitle: ct.title,
+          providedTaskId: ct.task_id,
+          matchedTask: match.matched,
+          isAmbiguous: false,
+          action: 'complete',
+          fieldChanges: {
+            status: { from: match.matched.status, to: 'Concluída' },
+          },
+        });
+        completedTasksSummary.push({
+          title: match.matched.title,
+          matchedTaskId: match.matched.id,
+        });
+      } else {
+        completedTasksMatches.push({
+          providedTitle: ct.title,
+          providedTaskId: ct.task_id,
+          isAmbiguous: match.isAmbiguous,
+          ambiguousCandidates: match.candidates,
+          action: 'create',
+          newTaskData: {
+            title: ct.title || 'Tarefa Concluída',
+            type: ct.type || 'Melhoria',
+            priority: ct.priority || 'Média',
+            status: 'concluida',
+            description: ct.description || 'Concluída via atualização IA',
+          },
+        });
+        completedTasksSummary.push({
+          title: ct.title || 'Tarefa Concluída',
+          matchedTaskId: null,
+        });
+      }
     }
   }
 
-  // 8. Updated Tasks Matching
+  // 8. Updated Tasks Diff
   const updatedTasksMatches: TaskMatchResult[] = [];
+  const updatedTasksSummary: Array<{ title: string; matchedTaskId?: string | null; changes: Record<string, string> }> = [];
+
   if (Array.isArray(data.updated_tasks)) {
     for (const ut of data.updated_tasks) {
       const match = matchTaskInProject(ut.task_id, ut.title, tasks);
-      const fieldChanges: TaskMatchResult['fieldChanges'] = {};
+      const changesMap: Record<string, string> = {};
 
       if (match.matched) {
+        const fieldChanges: TaskMatchResult['fieldChanges'] = {};
         if (ut.status) {
-          const mappedSt = mapSchemaTaskStatus(ut.status);
-          if (mappedSt !== match.matched.status) {
-            fieldChanges.status = { from: match.matched.status, to: mappedSt };
+          const targetStatus = mapSchemaTaskStatus(ut.status);
+          if (targetStatus !== match.matched.status) {
+            fieldChanges.status = { from: match.matched.status, to: targetStatus };
+            changesMap.status = targetStatus;
           }
         }
         if (ut.priority) {
-          const mappedP = mapSchemaPriority(ut.priority);
-          if (mappedP !== match.matched.priority) {
-            fieldChanges.priority = { from: match.matched.priority, to: mappedP };
+          const targetPri = mapSchemaPriority(ut.priority);
+          if (targetPri !== match.matched.priority) {
+            fieldChanges.priority = { from: match.matched.priority, to: targetPri };
+            changesMap.priority = targetPri;
           }
         }
         if (ut.type) {
-          const mappedT = mapSchemaTaskType(ut.type);
-          if (mappedT !== match.matched.type) {
-            fieldChanges.type = { from: match.matched.type, to: mappedT };
+          const targetType = mapSchemaTaskType(ut.type);
+          if (targetType !== match.matched.type) {
+            fieldChanges.type = { from: match.matched.type, to: targetType };
+            changesMap.type = targetType;
           }
         }
-        if (ut.description && ut.description.trim() !== match.matched.description.trim()) {
-          fieldChanges.description = {
-            from: match.matched.description,
-            to: ut.description.trim(),
-          };
+        if (ut.description && ut.description !== match.matched.description) {
+          fieldChanges.description = { from: match.matched.description, to: ut.description };
+          changesMap.description = ut.description;
         }
-      }
 
-      updatedTasksMatches.push({
-        providedTitle: ut.title,
-        providedTaskId: ut.task_id,
-        matchedTask: match.matched,
-        isAmbiguous: match.isAmbiguous,
-        ambiguousCandidates: match.candidates,
-        action: match.matched ? 'update' : 'unmatched',
-        fieldChanges,
-      });
-    }
-  }
+        updatedTasksMatches.push({
+          providedTitle: ut.title,
+          providedTaskId: ut.task_id,
+          matchedTask: match.matched,
+          action: 'update',
+          fieldChanges,
+        });
 
-  // 9. New Tasks To Create (filter duplicates already present in tasks)
-  const newTasksToCreate: ProjectUpdateSchemaNewTask[] = [];
-  if (Array.isArray(data.new_tasks)) {
-    for (const nt of data.new_tasks) {
-      if (nt.title && nt.title.trim()) {
-        const norm = normalizeString(nt.title);
-        const exists = tasks.some((t) => normalizeString(t.title) === norm);
-        if (!exists) {
-          newTasksToCreate.push(nt);
-        }
+        updatedTasksSummary.push({
+          title: match.matched.title,
+          matchedTaskId: match.matched.id,
+          changes: changesMap,
+        });
       }
     }
   }
 
-  // 10. Issues to convert to tasks
-  const issuesToCreate: ProjectUpdateSchemaIssue[] = [];
-  if (Array.isArray(data.issues)) {
-    for (const is of data.issues) {
-      if (is.title && is.title.trim()) {
-        issuesToCreate.push(is);
-      }
-    }
-  }
+  // 9. New Tasks to create
+  const newTasksToCreate = Array.isArray(data.new_tasks) ? data.new_tasks : [];
+  const issuesToCreate = Array.isArray(data.issues) ? data.issues : [];
 
-  // 11. Environment Changes matching
+  // 10. Environment Changes Diff
   const environmentChanges: ProjectUpdateDiff['environmentChanges'] = [];
   if (Array.isArray(data.environment_changes)) {
     for (const ec of data.environment_changes) {
-      let matchedEnv: Environment | undefined;
-      let isAmbiguous = false;
-
+      let matchedEnv: Environment | undefined = undefined;
       if (ec.environment_id) {
         matchedEnv = environments.find(
-          (e) => e.id.toLowerCase() === ec.environment_id?.trim().toLowerCase()
+          (e) =>
+            e.id.toLowerCase() === ec.environment_id!.toLowerCase() ||
+            (e.identifier && e.identifier.toLowerCase() === ec.environment_id!.toLowerCase())
         );
       }
-
       if (!matchedEnv && ec.service) {
-        const serviceNorm = normalizeString(ec.service);
-        const candidates = environments.filter(
-          (e) => normalizeString(e.service) === serviceNorm || normalizeString(e.name) === serviceNorm
+        matchedEnv = environments.find(
+          (e) => normalizeString(e.name) === normalizeString(ec.service!) || normalizeString(e.service) === normalizeString(ec.service!)
         );
-        if (candidates.length === 1) {
-          matchedEnv = candidates[0];
-        } else if (candidates.length > 1) {
-          isAmbiguous = true;
-        }
       }
-
       environmentChanges.push({
         envId: ec.environment_id,
         matchedEnv,
@@ -817,34 +1013,26 @@ export function buildProjectUpdateDiff(
         environment: ec.environment,
         change: ec.change,
         result: ec.result,
-        isAmbiguous,
+        isAmbiguous: false,
       });
     }
   }
 
-  // 12. Known State Diff
+  // 11. Known State Diff
   let knownStateDiff: ProjectUpdateDiff['knownState'] = null;
   if (data.known_state) {
-    const curState = project.statePhoto || {
+    const cur = project.statePhoto || {
       working: [],
       partiallyWorking: [],
       notWorking: [],
       untested: [],
       outOfScope: [],
     };
-    const ks = data.known_state;
-    const working = ks.working || curState.working;
-    const partiallyWorking = ks.partially_working || curState.partiallyWorking;
-    const notWorking = ks.not_working || curState.notWorking;
-    const untested = ks.not_tested || curState.untested;
-    const outOfScope = ks.out_of_scope || curState.outOfScope;
-
-    const hasChanges =
-      JSON.stringify(working) !== JSON.stringify(curState.working) ||
-      JSON.stringify(partiallyWorking) !== JSON.stringify(curState.partiallyWorking) ||
-      JSON.stringify(notWorking) !== JSON.stringify(curState.notWorking) ||
-      JSON.stringify(untested) !== JSON.stringify(curState.untested) ||
-      JSON.stringify(outOfScope) !== JSON.stringify(curState.outOfScope);
+    const working = data.known_state.working || cur.working || [];
+    const partiallyWorking = data.known_state.partially_working || cur.partiallyWorking || [];
+    const notWorking = data.known_state.not_working || cur.notWorking || [];
+    const untested = data.known_state.not_tested || cur.untested || [];
+    const outOfScope = data.known_state.out_of_scope || cur.outOfScope || [];
 
     knownStateDiff = {
       working,
@@ -852,7 +1040,7 @@ export function buildProjectUpdateDiff(
       notWorking,
       untested,
       outOfScope,
-      hasChanges,
+      hasChanges: true,
     };
   }
 
@@ -872,27 +1060,37 @@ export function buildProjectUpdateDiff(
       currentTaskId: project.nextTaskId,
       newTitle: nextMissionTitle,
       newTaskId: nextMissionTaskId,
+      new: nextMissionTitle, // UI alias
       whyImportant: data.next_action?.reason || data.next_action?.description,
       recommendedTool: data.next_action?.recommended_tool,
       changed: nextMissionChanged,
       resolutionSource: nextMissionResolutionSource,
     },
     completedTasksMatches,
+    completedTasks: completedTasksSummary,
     updatedTasksMatches,
+    updatedTasks: updatedTasksSummary,
     newTasksToCreate,
+    newTasks: newTasksToCreate,
     issuesToCreate,
+    issues: issuesToCreate,
     resolvedIssues: data.resolved_issues || [],
     decisions: data.decisions || [],
     technicalChanges: data.technical_changes || [],
     environmentChanges,
     repository: data.repository,
+    commit: data.repository?.commit
+      ? { hash: data.repository.commit, message: data.repository.commit_message || undefined }
+      : null,
     deployment: data.deployment,
+    deploy: data.deployment,
     knownState: knownStateDiff,
     contextSummary: data.context_summary,
     sessionData: data.session,
     recommendedFollowUp: data.recommended_follow_up,
     rawJsonString,
     hasRemovedSecrets,
+    parsedData: data,
   };
 }
 
@@ -937,6 +1135,34 @@ export function applyProjectUpdatePatch(
         projectName: project.name,
         title: 'TAREFA CONCLUÍDA VIA ATUALIZAÇÃO IA',
         description: `Tarefa "${match.matchedTask.title}" marcada como concluída conforme atualização técnica.`,
+      });
+    } else if (match.action === 'create' && match.newTaskData) {
+      // Create already-completed task
+      const newTaskId = `task-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+      const rawData = match.newTaskData as any;
+      const newTask: Task = {
+        id: newTaskId,
+        projectId: project.id,
+        projectName: project.name,
+        title: rawData.title,
+        description: rawData.description || '',
+        type: mapSchemaTaskType(rawData.type),
+        priority: mapSchemaPriority(rawData.priority || rawData.severity),
+        status: 'Concluída',
+        assignedTo: operatorName,
+        isNextMission: false,
+        createdAt: now,
+        updatedAt: now,
+      };
+      currentTasks = [newTask, ...currentTasks];
+
+      historyEvents.push({
+        type: 'TASK_COMPLETED',
+        category: 'TAREFA',
+        projectId: project.id,
+        projectName: project.name,
+        title: 'TAREFA REGISTRADA COMO CONCLUÍDA',
+        description: `Tarefa "${newTask.title}" registrada diretamente como concluída pela atualização.`,
       });
     }
   }
@@ -1045,7 +1271,6 @@ export function applyProjectUpdatePatch(
       description: `Problema "${resIs.title}" resolvido: ${resIs.resolution || 'Correção confirmada'} | Validação: ${resIs.validation || 'Sim'}.`,
     });
 
-    // If an existing task matches this resolved issue title, mark it as completed
     const matchingTask = matchTaskInProject(null, resIs.title, currentTasks);
     if (matchingTask.matched && matchingTask.matched.status !== 'Concluída') {
       currentTasks = currentTasks.map((t) =>
@@ -1121,24 +1346,24 @@ export function applyProjectUpdatePatch(
   let finalNextTaskId: string | null = project.nextTaskId;
   let finalNextTaskTitle: string | undefined = project.nextTaskTitle;
 
-  if (diff.nextMission.changed && diff.nextMission.newTitle) {
+  const candidateMissionTitle = diff.nextMission.newTitle || diff.nextMission.new;
+
+  if (diff.nextMission.changed && candidateMissionTitle) {
     if (diff.nextMission.newTaskId) {
       finalNextTaskId = diff.nextMission.newTaskId;
-      finalNextTaskTitle = diff.nextMission.newTitle;
+      finalNextTaskTitle = candidateMissionTitle;
     } else {
-      // Find matching task among currentTasks or createdNewTasks
-      const match = matchTaskInProject(null, diff.nextMission.newTitle, currentTasks);
+      const match = matchTaskInProject(null, candidateMissionTitle, currentTasks);
       if (match.matched) {
         finalNextTaskId = match.matched.id;
         finalNextTaskTitle = match.matched.title;
       } else {
-        // Create new task for Next Mission
         const nextTaskId = `task-mission-${Date.now()}`;
         const missionTask: Task = {
           id: nextTaskId,
           projectId: project.id,
           projectName: project.name,
-          title: diff.nextMission.newTitle,
+          title: candidateMissionTitle,
           description: diff.nextMission.whyImportant || 'Definida como próxima missão via IA',
           type: 'Feature',
           priority: 'Alta',
@@ -1170,14 +1395,14 @@ export function applyProjectUpdatePatch(
     });
   }
 
-  // 10. Update Project fields (PATCH rules: null/undefined = retain current value)
+  // 10. Update Project fields (PATCH rules: update whenever valid new value provided)
   const updatedProject: Project = {
     ...project,
-    health: diff.health.changed ? diff.health.new : project.health,
-    status: diff.status.changed ? diff.status.new : project.status,
-    phase: diff.phase.changed ? diff.phase.new : project.phase,
-    progress: diff.progress.changed ? diff.progress.new : project.progress,
-    objective: diff.objective.changed ? diff.objective.new : project.objective,
+    health: diff.health.new || project.health,
+    status: diff.status.new || project.status,
+    phase: diff.phase.new || project.phase,
+    progress: typeof diff.progress.new === 'number' && !isNaN(diff.progress.new) ? diff.progress.new : project.progress,
+    objective: diff.objective.new || project.objective,
     nextTaskId: finalNextTaskId,
     nextTaskTitle: finalNextTaskTitle || project.nextTaskTitle,
     nextTaskWhyImportant: diff.nextMission.whyImportant || project.nextTaskWhyImportant,
@@ -1198,7 +1423,8 @@ export function applyProjectUpdatePatch(
 
   // 11. Create Session entity if session data is present
   let newSession: Session | undefined;
-  if (parsedData.session && (parsedData.session.summary || parsedData.session.work_performed?.length)) {
+  const effectiveSession = parsedData.session || diff.sessionData;
+  if (effectiveSession && (effectiveSession.summary || effectiveSession.work_performed?.length)) {
     const sessNum = (project as any).sessionCount ? (project as any).sessionCount + 1 : Math.floor(Math.random() * 80) + 10;
     newSession = {
       id: `sess-update-${Date.now()}`,
@@ -1207,14 +1433,14 @@ export function applyProjectUpdatePatch(
       projectName: project.name,
       taskId: finalNextTaskId || undefined,
       taskTitle: finalNextTaskTitle,
-      objective: parsedData.session.summary || 'Sessão de atualização registrada via IA',
+      objective: effectiveSession.summary || 'Sessão de atualização registrada via IA',
       startedAt: now,
       endedAt: now,
       durationMinutes: 45,
       status: 'encerrada',
-      workDone: (parsedData.session.work_performed || []).join('\n') || parsedData.session.summary || undefined,
-      result: parsedData.session.result || 'sucesso',
-      testsDone: (parsedData.session.tests_performed || []).join('\n') || parsedData.session.tests_result || undefined,
+      workDone: (effectiveSession.work_performed || []).join('\n') || effectiveSession.summary || undefined,
+      result: effectiveSession.result || 'sucesso',
+      testsDone: (effectiveSession.tests_performed || []).join('\n') || effectiveSession.tests_result || undefined,
       commitHash: diff.repository?.commit || undefined,
       commitMessage: diff.repository?.commit_message || undefined,
       deployDone: Boolean(diff.deployment?.performed),
@@ -1240,7 +1466,7 @@ export function applyProjectUpdatePatch(
     appliedAt: now,
     summary:
       parsedData.session?.summary ||
-      `Atualização técnica aplicada: Saúde: ${diff.health.new}, Progresso: ${diff.progress.new}%.`,
+      `Atualização técnica aplicada: Saúde: ${updatedProject.health}, Progresso: ${updatedProject.progress}%.`,
   };
 
   // Primary History Event
