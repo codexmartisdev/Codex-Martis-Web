@@ -676,7 +676,6 @@ interface StoreContextType {
 
   // Real Firebase Auth
   signInWithGoogleAuth: () => Promise<{ success: boolean; error?: string; isUnauthorizedDomain?: boolean }>;
-  loginAsAuthorizedOperator: () => void;
   login: (email?: string, pass?: string, isGoogle?: boolean) => Promise<boolean>;
   logout: () => Promise<void>;
   clearAuthError: () => void;
@@ -819,39 +818,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return defaultList;
   });
 
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const savedSession = localStorage.getItem('codex_local_operator_session');
-        if (savedSession) {
-          const parsed = JSON.parse(savedSession);
-          if (parsed.active && parsed.email === AUTHORIZED_OPERATOR_EMAIL) {
-            return getOperatorFallbackProfile();
-          }
-        }
-      } catch (e) {
-        console.warn('Error reading local operator session on init', e);
-      }
-    }
-    return null;
-  });
-
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const savedSession = localStorage.getItem('codex_local_operator_session');
-        if (savedSession) {
-          const parsed = JSON.parse(savedSession);
-          if (parsed.active && parsed.email === AUTHORIZED_OPERATOR_EMAIL) {
-            return true;
-          }
-        }
-      } catch (e) {
-        console.warn('Error reading local operator auth on init', e);
-      }
-    }
-    return false;
-  });
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -882,9 +850,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Subscribe to real Firebase Auth state changes
   useEffect(() => {
     const unsubscribe = subscribeToAuthState(({ user, isAuthenticated: isAuthed, authError: err }) => {
-      if (user) {
+      if (user && isAuthed) {
         setCurrentUser(user);
-        setIsAuthenticated(isAuthed);
+        setIsAuthenticated(true);
+      } else {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        setIsFirestoreConnected(false);
+        // Clear all sensitive collections from memory when unauthenticated/session ended
+        setProjects([]);
+        setTasks([]);
+        setSessions([]);
+        setEnvironments([]);
+        setHistory([]);
+        setProjectUpdates([]);
+        setActiveSession(null);
+        setSelectedProjectId(null);
       }
       if (err) {
         setAuthError(err);
@@ -897,15 +878,26 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, []);
 
-  // Connect and synchronize real-time with Cloud Firestore
+  // Connect and synchronize real-time with Cloud Firestore ONLY after verified Firebase Auth operator confirmation
   useEffect(() => {
+    // If not authenticated or not the authorized operator, do not initiate connection or listeners
+    if (!isAuthenticated || currentUser?.email !== AUTHORIZED_OPERATOR_EMAIL) {
+      return;
+    }
+
+    let isSubscribed = true;
+
+    // Ping test connection document for authorized operator
     testConnection().then((connected) => {
-      setIsFirestoreConnected(connected);
+      if (isSubscribed) {
+        setIsFirestoreConnected(connected);
+      }
     });
 
     // Subscribe to projects in Cloud Firestore
     const unsubProjects = subscribeToProjects(
       (firestoreProjects) => {
+        if (!isSubscribed) return;
         if (firestoreProjects && firestoreProjects.length > 0) {
           setProjects(firestoreProjects);
           setIsFirestoreConnected(true);
@@ -925,67 +917,56 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     );
 
     const unsubTasks = subscribeToTasks((firestoreTasks) => {
+      if (!isSubscribed) return;
       if (firestoreTasks && firestoreTasks.length > 0) {
         setTasks(firestoreTasks);
       }
     });
 
     const unsubEnvs = subscribeToEnvironments((firestoreEnvs) => {
+      if (!isSubscribed) return;
       if (firestoreEnvs && firestoreEnvs.length > 0) {
         setEnvironments(firestoreEnvs);
       }
     });
 
     const unsubSessions = subscribeToSessions((firestoreSessions) => {
+      if (!isSubscribed) return;
       if (firestoreSessions && firestoreSessions.length > 0) {
         setSessions(firestoreSessions);
       }
     });
 
     const unsubHistory = subscribeToHistory((firestoreHistory) => {
+      if (!isSubscribed) return;
       if (firestoreHistory && firestoreHistory.length > 0) {
         setHistory(firestoreHistory);
       }
     });
 
     const unsubUpdates = subscribeToProjectUpdates((firestoreUpdates) => {
+      if (!isSubscribed) return;
       if (firestoreUpdates && firestoreUpdates.length > 0) {
         setProjectUpdates(firestoreUpdates);
       }
     });
 
+    // Unsubscribe all listeners and terminate connection state when session ends
     return () => {
+      isSubscribed = false;
       unsubProjects();
       unsubTasks();
       unsubEnvs();
       unsubSessions();
       unsubHistory();
       unsubUpdates();
+      setIsFirestoreConnected(false);
     };
-  }, []);
-
-  // Synchronize initial data to Cloud Firestore once operator authenticates
-  useEffect(() => {
-    if (isAuthenticated && currentUser?.email === AUTHORIZED_OPERATOR_EMAIL) {
-      testConnection().then((connected) => {
-        setIsFirestoreConnected(connected);
-        if (connected) {
-          const currentData = dataRefs.current;
-          seedInitialDataToFirestore(
-            currentData.projects.length > 0 ? currentData.projects : INITIAL_PROJECTS,
-            currentData.tasks.length > 0 ? currentData.tasks : INITIAL_TASKS,
-            currentData.environments.length > 0 ? currentData.environments : INITIAL_ENVIRONMENTS,
-            currentData.history.length > 0 ? currentData.history : INITIAL_HISTORY,
-            currentData.sessions.length > 0 ? currentData.sessions : INITIAL_SESSIONS
-          ).catch((e) => console.warn('Falha na sincronização ao autenticar no Firestore:', e));
-        }
-      });
-    }
   }, [isAuthenticated, currentUser?.email]);
 
-
-  // Sync operational data to localStorage (Auth is strictly managed by Firebase)
+  // Sync operational data to localStorage only when fully authenticated
   useEffect(() => {
+    if (!isAuthenticated) return;
     try {
       localStorage.setItem('codex_projects', JSON.stringify(projects));
       localStorage.setItem('codex_tasks', JSON.stringify(tasks));
@@ -998,7 +979,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (e) {
       console.warn('Error writing to localStorage', e);
     }
-  }, [projects, tasks, sessions, activeSession, environments, history, projectUpdates, promptTemplates]);
+  }, [isAuthenticated, projects, tasks, sessions, activeSession, environments, history, projectUpdates, promptTemplates]);
 
   const getNowFormatted = () => {
     const d = new Date();
@@ -1726,31 +1707,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const loginAsAuthorizedOperator = () => {
-    const operator = getOperatorFallbackProfile();
-    setCurrentUser(operator);
-    setIsAuthenticated(true);
-    setAuthError(null);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(
-          'codex_local_operator_session',
-          JSON.stringify({ active: true, email: AUTHORIZED_OPERATOR_EMAIL })
-        );
-      } catch (e) {
-        console.warn('Error saving local operator session', e);
-      }
-    }
-    addHistoryEvent({
-      type: 'SESSION_STARTED',
-      category: 'SESSAO',
-      projectId: 'system',
-      projectName: 'Codex Martis',
-      title: 'ACESSO DE COMANDO CONCEDIDO',
-      description: `Operador autorizado (${AUTHORIZED_OPERATOR_EMAIL}) autenticado no Codex Martis.`,
-    });
-  };
-
   const login = async (_email?: string, _pass?: string, _isGoogle = true) => {
     const res = await signInWithGoogleAuth();
     return res.success;
@@ -1761,10 +1717,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (typeof window !== 'undefined') {
       try {
         localStorage.removeItem('codex_local_operator_session');
-      } catch (e) {}
+        localStorage.removeItem('codex_projects');
+        localStorage.removeItem('codex_tasks');
+        localStorage.removeItem('codex_sessions');
+        localStorage.removeItem('codex_active_session');
+        localStorage.removeItem('codex_environments');
+        localStorage.removeItem('codex_history');
+        localStorage.removeItem('codex_project_updates');
+      } catch (e) {
+        console.warn('Error clearing localStorage on logout', e);
+      }
     }
     setIsAuthenticated(false);
     setCurrentUser(null);
+    setIsFirestoreConnected(false);
+    setIsFirestoreSyncing(false);
+    setSelectedProjectId(null);
+    setActiveSession(null);
+    setProjects([]);
+    setTasks([]);
+    setSessions([]);
+    setEnvironments([]);
+    setHistory([]);
+    setProjectUpdates([]);
   };
 
   const clearAuthError = () => {
@@ -1876,7 +1851,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         validateProjectImport,
         createProjectFromImport,
         signInWithGoogleAuth,
-        loginAsAuthorizedOperator,
         login,
         logout,
         clearAuthError,

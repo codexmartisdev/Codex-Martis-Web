@@ -2,6 +2,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Default-deny everything not explicitly allowed
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
     // Helper functions
     function isValidId(id) {
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
@@ -15,14 +20,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Operator must be authenticated, with the exact operator email, and email_verified == true
     function isOperator() {
-      return isSignedIn() && (
-        request.auth.token.email == 'codex.martis.dev@gmail.com' ||
-        (request.auth.token.keys().hasAll(['email_verified']) && request.auth.token.email_verified == true)
-      );
+      return isSignedIn() &&
+        request.auth.token.email == 'codex.martis.dev@gmail.com' &&
+        request.auth.token.email_verified == true;
     }
 
-    // Entity Validators
+    // Entity Validators (preserving existing document validations)
     function isValidProject(data) {
       return data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
              data.identifier is string && data.identifier.size() <= 100 &&
@@ -57,57 +62,63 @@ service cloud.firestore {
              data.schemaVersion is string && data.schemaVersion.size() <= 50;
     }
 
-    // Projects collection: readable by all, writable by operator
+    // Projects collection: exclusive to authorized operator
     match /projects/{projectId} {
-      allow get, list: if true;
+      allow get: if isOperator() && isValidId(projectId);
+      allow list: if isOperator();
       allow create: if isOperator() && isValidId(projectId) && isValidProject(incoming());
       allow update: if isOperator() && isValidId(projectId) && isValidProject(incoming());
       allow delete: if isOperator() && isValidId(projectId);
     }
 
-    // Tasks collection: readable by all, writable by operator
+    // Tasks collection: exclusive to authorized operator
     match /tasks/{taskId} {
-      allow get, list: if true;
+      allow get: if isOperator() && isValidId(taskId);
+      allow list: if isOperator();
       allow create: if isOperator() && isValidId(taskId) && isValidTask(incoming());
       allow update: if isOperator() && isValidId(taskId) && isValidTask(incoming());
       allow delete: if isOperator() && isValidId(taskId);
     }
 
-    // Sessions collection: readable by all, writable by operator
+    // Sessions collection: exclusive to authorized operator
     match /sessions/{sessionId} {
-      allow get, list: if true;
+      allow get: if isOperator() && isValidId(sessionId);
+      allow list: if isOperator();
       allow create: if isOperator() && isValidId(sessionId) && isValidSession(incoming());
       allow update: if isOperator() && isValidId(sessionId) && isValidSession(incoming());
       allow delete: if isOperator() && isValidId(sessionId);
     }
 
-    // Environments collection: readable by all, writable by operator
+    // Environments collection: exclusive to authorized operator
     match /environments/{environmentId} {
-      allow get, list: if true;
+      allow get: if isOperator() && isValidId(environmentId);
+      allow list: if isOperator();
       allow create: if isOperator() && isValidId(environmentId) && isValidEnvironment(incoming());
       allow update: if isOperator() && isValidId(environmentId) && isValidEnvironment(incoming());
       allow delete: if isOperator() && isValidId(environmentId);
     }
 
-    // History collection: readable by all, writable by operator
+    // History collection: exclusive to authorized operator
     match /history/{historyId} {
-      allow get, list: if true;
+      allow get: if isOperator() && isValidId(historyId);
+      allow list: if isOperator();
       allow create: if isOperator() && isValidId(historyId) && isValidHistory(incoming());
       allow update: if isOperator() && isValidId(historyId) && isValidHistory(incoming());
       allow delete: if isOperator() && isValidId(historyId);
     }
 
-    // Project Updates collection: readable by all, writable by operator
+    // Project Updates collection: exclusive to authorized operator
     match /projectUpdates/{updateId} {
-      allow get, list: if true;
+      allow get: if isOperator() && isValidId(updateId);
+      allow list: if isOperator();
       allow create: if isOperator() && isValidId(updateId) && isValidProjectUpdate(incoming());
       allow update: if isOperator() && isValidId(updateId) && isValidProjectUpdate(incoming());
       allow delete: if isOperator() && isValidId(updateId);
     }
 
-    // Test connection doc (for healthcheck testConnection())
+    // Test connection doc: read-only, exclusive to authorized operator
     match /test/{docId} {
-      allow read, write: if true;
+      allow get: if isOperator() && isValidId(docId);
     }
   }
 }

@@ -11,7 +11,6 @@ import {
   Copy,
   Check,
   Globe,
-  UserCheck,
   ArrowRight,
   Terminal,
 } from 'lucide-react';
@@ -19,7 +18,7 @@ import { AUTHORIZED_OPERATOR_EMAIL } from '@/lib/firebase/auth';
 import { isFirebaseConfigured } from '@/lib/firebase/config';
 
 export const LoginView: React.FC = () => {
-  const { signInWithGoogleAuth, loginAsAuthorizedOperator, authError, clearAuthError } = useStore();
+  const { signInWithGoogleAuth, authError, clearAuthError } = useStore();
   const [isLoading, setIsLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [copiedDomain, setCopiedDomain] = useState(false);
@@ -220,26 +219,6 @@ export const LoginView: React.FC = () => {
                   </>
                 )}
               </button>
-
-              {/* Direct Authorized Operator Access (Sandbox / Dev Bypass) */}
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => loginAsAuthorizedOperator()}
-                  className="w-full py-2.5 px-3 rounded-lg bg-[#14141A] hover:bg-[#1C1C24] active:bg-[#252530] border border-[#2B2B38] hover:border-[#E84A32]/60 text-[#D8D8DC] hover:text-white font-bold text-[11px] tracking-wide uppercase flex items-center justify-between transition-all font-heading group"
-                >
-                  <div className="flex items-center gap-2">
-                    <UserCheck className="w-4 h-4 text-emerald-400 group-hover:text-[#E84A32] transition-colors" />
-                    <span>Acesso Direto do Operador Solo</span>
-                  </div>
-                  <span className="text-[10px] text-[#808088] font-mono-code group-hover:text-[#D8D8DC]">
-                    Sandbox / Dev &rarr;
-                  </span>
-                </button>
-                <p className="text-[10px] text-[#555560] text-center mt-1.5 font-mono-code">
-                  Concede acesso imediato à conta de comando cadastrada.
-                </p>
-              </div>
             </div>
           </div>
         </div>

@@ -17,11 +17,18 @@ export const AUTHORIZED_OPERATOR_EMAIL = (
   .trim();
 
 /**
- * Validates whether the given email corresponds to the authorized operator
+ * Validates whether the given email corresponds to the authorized operator with email verified
  */
-export function isAuthorizedOperator(email: string | null | undefined): boolean {
+export function isAuthorizedOperator(
+  email: string | null | undefined,
+  emailVerified?: boolean
+): boolean {
   if (!email) return false;
-  return email.toLowerCase().trim() === AUTHORIZED_OPERATOR_EMAIL;
+  const isEmailMatch = email.toLowerCase().trim() === AUTHORIZED_OPERATOR_EMAIL;
+  if (emailVerified !== undefined) {
+    return isEmailMatch && emailVerified === true;
+  }
+  return isEmailMatch;
 }
 
 /**
@@ -88,12 +95,16 @@ export async function signInWithGoogle(): Promise<AuthResult> {
     const credential = await signInWithPopup(auth, provider);
     const user = credential.user;
 
-    if (!isAuthorizedOperator(user.email)) {
+    if (!isAuthorizedOperator(user.email, user.emailVerified)) {
       // Account not authorized: forcefully terminate Firebase session
       await firebaseSignOut(auth);
+      const errorMsg =
+        !user.emailVerified && user.email?.toLowerCase().trim() === AUTHORIZED_OPERATOR_EMAIL
+          ? `Acesso negado. O e-mail (${user.email}) precisa estar verificado no Firebase Auth para autorizar o comando.`
+          : `Acesso negado (${user.email || 'Conta não identificada'}). Apenas o operador autorizado (${AUTHORIZED_OPERATOR_EMAIL}) com e-mail verificado tem permissão de comando no Codex Martis.`;
       return {
         success: false,
-        error: `Acesso negado (${user.email || 'Conta não identificada'}). Apenas o operador autorizado (${AUTHORIZED_OPERATOR_EMAIL}) tem permissão de comando no Codex Martis.`,
+        error: errorMsg,
       };
     }
 
@@ -172,7 +183,7 @@ export function subscribeToAuthState(
 
   return onAuthStateChanged(auth, async (firebaseUser) => {
     if (firebaseUser) {
-      if (isAuthorizedOperator(firebaseUser.email)) {
+      if (isAuthorizedOperator(firebaseUser.email, firebaseUser.emailVerified)) {
         const profile = mapFirebaseUserToProfile(firebaseUser);
         callback({
           user: profile,
@@ -185,10 +196,15 @@ export function subscribeToAuthState(
         } catch (e) {
           console.warn('Signout after unauthorized access attempt:', e);
         }
+        const errorMsg =
+          !firebaseUser.emailVerified &&
+          firebaseUser.email?.toLowerCase().trim() === AUTHORIZED_OPERATOR_EMAIL
+            ? `Acesso negado. O e-mail (${firebaseUser.email}) precisa estar verificado no Firebase Auth.`
+            : `Acesso negado (${firebaseUser.email || 'Conta'}). Apenas o operador autorizado (${AUTHORIZED_OPERATOR_EMAIL}) com e-mail verificado tem permissão de comando.`;
         callback({
           user: null,
           isAuthenticated: false,
-          authError: `Acesso negado (${firebaseUser.email || 'Conta'}). Apenas o operador (${AUTHORIZED_OPERATOR_EMAIL}) está autorizado.`,
+          authError: errorMsg,
         });
       }
     } else {
