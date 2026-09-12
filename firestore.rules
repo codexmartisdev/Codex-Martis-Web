@@ -86,7 +86,7 @@ service cloud.firestore {
              ]) &&
              isNonEmptyString(data.name, 200) &&
              isValidId(data.projectId) &&
-             isNonEmptyString(data.service, 200) &&
+             isNonEmptyString(data['service'], 200) &&
              isNonEmptyString(data.account, 320) &&
              isNonEmptyString(data.status, 100) &&
              isOptionalStringWithin(data, 'observations', 20000);
