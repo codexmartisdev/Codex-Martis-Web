@@ -7,8 +7,6 @@ import {
   getDocs,
   getDocFromServer,
   onSnapshot,
-  query,
-  orderBy,
   Unsubscribe,
   writeBatch,
 } from 'firebase/firestore';
@@ -55,7 +53,7 @@ export function handleFirestoreError(
   error: unknown,
   operationType: OperationType,
   path: string | null
-): void {
+): FirestoreErrorInfo {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -74,10 +72,25 @@ export function handleFirestoreError(
     path,
   };
   console.warn('Firestore Notice: ', JSON.stringify(errInfo));
+  return errInfo;
+}
+
+function rethrowFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null
+): never {
+  handleFirestoreError(error, operationType, path);
+  if (error instanceof Error) {
+    throw error;
+  }
+  throw new Error(String(error));
 }
 
 /**
- * Validates connection to Firestore by pinging the test collection from the server.
+ * Validates connection to Firestore by reading the protected test path from the server.
+ * A missing document is still a successful connectivity/auth/rules check; permission and
+ * transport failures reject getDocFromServer and return false here.
  */
 export async function testConnection(): Promise<boolean> {
   try {
@@ -87,6 +100,7 @@ export async function testConnection(): Promise<boolean> {
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.warn('Firebase Firestore client is offline or initializing.');
     }
+    handleFirestoreError(error, OperationType.GET, 'test/connection');
     return false;
   }
 }
@@ -102,7 +116,7 @@ export async function saveProjectToFirestore(project: Project): Promise<void> {
     const ref = doc(db, PROJECTS_COLLECTION, project.id);
     await setDoc(ref, project, { merge: true });
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `${PROJECTS_COLLECTION}/${project.id}`);
+    rethrowFirestoreError(error, OperationType.WRITE, `${PROJECTS_COLLECTION}/${project.id}`);
   }
 }
 
@@ -117,7 +131,7 @@ export async function updateProjectInFirestore(
       updatedAt: new Date().toISOString(),
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `${PROJECTS_COLLECTION}/${id}`);
+    rethrowFirestoreError(error, OperationType.UPDATE, `${PROJECTS_COLLECTION}/${id}`);
   }
 }
 
@@ -126,7 +140,7 @@ export async function deleteProjectFromFirestore(id: string): Promise<void> {
     const ref = doc(db, PROJECTS_COLLECTION, id);
     await deleteDoc(ref);
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, `${PROJECTS_COLLECTION}/${id}`);
+    rethrowFirestoreError(error, OperationType.DELETE, `${PROJECTS_COLLECTION}/${id}`);
   }
 }
 
@@ -142,7 +156,6 @@ export function subscribeToProjects(
       snapshot.forEach((d) => {
         items.push(d.data() as Project);
       });
-      // Sort projects by updatedAt descending
       items.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
       callback(items);
     },
@@ -165,7 +178,7 @@ export async function saveTaskToFirestore(task: Task): Promise<void> {
     const ref = doc(db, TASKS_COLLECTION, task.id);
     await setDoc(ref, task, { merge: true });
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `${TASKS_COLLECTION}/${task.id}`);
+    rethrowFirestoreError(error, OperationType.WRITE, `${TASKS_COLLECTION}/${task.id}`);
   }
 }
 
@@ -180,7 +193,7 @@ export async function updateTaskInFirestore(
       updatedAt: new Date().toISOString(),
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `${TASKS_COLLECTION}/${id}`);
+    rethrowFirestoreError(error, OperationType.UPDATE, `${TASKS_COLLECTION}/${id}`);
   }
 }
 
@@ -189,7 +202,7 @@ export async function deleteTaskFromFirestore(id: string): Promise<void> {
     const ref = doc(db, TASKS_COLLECTION, id);
     await deleteDoc(ref);
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, `${TASKS_COLLECTION}/${id}`);
+    rethrowFirestoreError(error, OperationType.DELETE, `${TASKS_COLLECTION}/${id}`);
   }
 }
 
@@ -227,7 +240,7 @@ export async function saveSessionToFirestore(session: Session): Promise<void> {
     const ref = doc(db, SESSIONS_COLLECTION, session.id);
     await setDoc(ref, session, { merge: true });
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `${SESSIONS_COLLECTION}/${session.id}`);
+    rethrowFirestoreError(error, OperationType.WRITE, `${SESSIONS_COLLECTION}/${session.id}`);
   }
 }
 
@@ -265,7 +278,7 @@ export async function saveEnvironmentToFirestore(env: Environment): Promise<void
     const ref = doc(db, ENVIRONMENTS_COLLECTION, env.id);
     await setDoc(ref, env, { merge: true });
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `${ENVIRONMENTS_COLLECTION}/${env.id}`);
+    rethrowFirestoreError(error, OperationType.WRITE, `${ENVIRONMENTS_COLLECTION}/${env.id}`);
   }
 }
 
@@ -280,7 +293,7 @@ export async function updateEnvironmentInFirestore(
       updatedAt: new Date().toISOString(),
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `${ENVIRONMENTS_COLLECTION}/${id}`);
+    rethrowFirestoreError(error, OperationType.UPDATE, `${ENVIRONMENTS_COLLECTION}/${id}`);
   }
 }
 
@@ -289,7 +302,7 @@ export async function deleteEnvironmentFromFirestore(id: string): Promise<void> 
     const ref = doc(db, ENVIRONMENTS_COLLECTION, id);
     await deleteDoc(ref);
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, `${ENVIRONMENTS_COLLECTION}/${id}`);
+    rethrowFirestoreError(error, OperationType.DELETE, `${ENVIRONMENTS_COLLECTION}/${id}`);
   }
 }
 
@@ -326,7 +339,7 @@ export async function saveHistoryEventToFirestore(event: HistoryEvent): Promise<
     const ref = doc(db, HISTORY_COLLECTION, event.id);
     await setDoc(ref, event, { merge: true });
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `${HISTORY_COLLECTION}/${event.id}`);
+    rethrowFirestoreError(error, OperationType.WRITE, `${HISTORY_COLLECTION}/${event.id}`);
   }
 }
 
@@ -364,7 +377,7 @@ export async function saveProjectUpdateToFirestore(update: ProjectUpdate): Promi
     const ref = doc(db, PROJECT_UPDATES_COLLECTION, update.id);
     await setDoc(ref, update, { merge: true });
   } catch (error) {
-    handleFirestoreError(
+    rethrowFirestoreError(
       error,
       OperationType.WRITE,
       `${PROJECT_UPDATES_COLLECTION}/${update.id}`
@@ -399,25 +412,25 @@ export function subscribeToProjectUpdates(
 // BATCH SEED MIGRATION TO FIRESTORE
 // ==========================================
 
+export type FirestoreSeedResult = 'seeded' | 'already-populated';
+
 export async function seedInitialDataToFirestore(
   projects: Project[],
   tasks: Task[],
   environments: Environment[],
   history: HistoryEvent[],
   sessions: Session[]
-): Promise<void> {
+): Promise<FirestoreSeedResult> {
   if (!ALLOW_INITIAL_FIRESTORE_SEED) {
-    console.warn(
-      'Codex Martis: initial Firestore seed blocked. Set NEXT_PUBLIC_ALLOW_FIRESTORE_SEED=true only for an intentional migration.'
+    throw new Error(
+      'Initial Firestore seed is disabled. Set NEXT_PUBLIC_ALLOW_FIRESTORE_SEED=true only for an intentional migration.'
     );
-    return;
   }
 
   try {
     const existing = await getDocs(collection(db, PROJECTS_COLLECTION));
     if (!existing.empty) {
-      // Data already in Firestore, do not overwrite
-      return;
+      return 'already-populated';
     }
 
     const batch = writeBatch(db);
@@ -440,7 +453,8 @@ export async function seedInitialDataToFirestore(
 
     await batch.commit();
     console.log('Codex Martis: Seed data successfully synced to Cloud Firestore.');
-  } catch (err) {
-    console.warn('Could not batch seed data to Firestore:', err);
+    return 'seeded';
+  } catch (error) {
+    rethrowFirestoreError(error, OperationType.WRITE, 'initial-seed');
   }
 }
