@@ -3,6 +3,9 @@ import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
 const EXPECTED_FIREBASE_PROJECT_ID = 'codex-martis-dev';
+const EXPECTED_FIREBASE_AUTH_DOMAIN = 'codex-martis-dev.firebaseapp.com';
+const EXPECTED_FIREBASE_MESSAGING_SENDER_ID = '298157879508';
+const EXPECTED_FIREBASE_APP_ID = '1:298157879508:web:011e820fdcb1d9fb3acb41';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '',
@@ -13,17 +16,25 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '',
 };
 
+const matchesExpectedFirebaseApp =
+  firebaseConfig.projectId === EXPECTED_FIREBASE_PROJECT_ID &&
+  firebaseConfig.authDomain === EXPECTED_FIREBASE_AUTH_DOMAIN &&
+  firebaseConfig.messagingSenderId === EXPECTED_FIREBASE_MESSAGING_SENDER_ID &&
+  firebaseConfig.appId === EXPECTED_FIREBASE_APP_ID;
+
 export const isFirebaseConfigured = Boolean(
   firebaseConfig.apiKey &&
     firebaseConfig.authDomain &&
     firebaseConfig.projectId &&
+    firebaseConfig.storageBucket &&
+    firebaseConfig.messagingSenderId &&
     firebaseConfig.appId &&
-    firebaseConfig.projectId === EXPECTED_FIREBASE_PROJECT_ID
+    matchesExpectedFirebaseApp
 );
 
-if (firebaseConfig.projectId && firebaseConfig.projectId !== EXPECTED_FIREBASE_PROJECT_ID) {
+if (firebaseConfig.projectId && !matchesExpectedFirebaseApp) {
   console.error(
-    `Firebase configuration rejected: expected projectId "${EXPECTED_FIREBASE_PROJECT_ID}", received "${firebaseConfig.projectId}".`
+    'Firebase configuration rejected: the environment variables do not match the Codex Martis dev Web App.'
   );
 }
 
@@ -40,5 +51,6 @@ export const app: FirebaseApp = getApps().length
           }
     );
 
+// Codex Martis uses the default Firestore database of codex-martis-dev.
 export const db: Firestore = getFirestore(app);
 export const auth: Auth = getAuth(app);
