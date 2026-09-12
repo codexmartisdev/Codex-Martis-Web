@@ -2,14 +2,17 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Default-deny everything not explicitly allowed
+    // Default-deny everything not explicitly allowed.
     match /{document=**} {
       allow read, write: if false;
     }
 
     // Helper functions
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
+      return id is string &&
+             id.size() > 0 &&
+             id.size() <= 128 &&
+             id.matches('^[a-zA-Z0-9_-]+$');
     }
 
     function incoming() {
@@ -20,46 +23,97 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Operator must be authenticated, with the exact operator email, and email_verified == true
+    function isNonEmptyString(value, maxSize) {
+      return value is string && value.size() > 0 && value.size() <= maxSize;
+    }
+
+    function isOptionalStringWithin(data, field, maxSize) {
+      return !data.keys().hasAny([field]) ||
+             (data[field] is string && data[field].size() <= maxSize);
+    }
+
+    // Operator must be authenticated, use the exact operator email and have a verified email.
     function isOperator() {
       return isSignedIn() &&
         request.auth.token.email == 'codex.martis.dev@gmail.com' &&
         request.auth.token.email_verified == true;
     }
 
-    // Entity Validators (preserving existing document validations)
+    // Entity validators
     function isValidProject(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
-             data.identifier is string && data.identifier.size() <= 100 &&
-             data.status is string && data.status.size() <= 50 &&
-             data.progress is number && data.progress >= 0 && data.progress <= 100;
+      return data.keys().hasAll([
+               'name', 'identifier', 'status', 'progress', 'createdAt', 'updatedAt'
+             ]) &&
+             isNonEmptyString(data.name, 200) &&
+             isNonEmptyString(data.identifier, 100) &&
+             isNonEmptyString(data.status, 50) &&
+             data.progress is number && data.progress >= 0 && data.progress <= 100 &&
+             isNonEmptyString(data.createdAt, 64) &&
+             isNonEmptyString(data.updatedAt, 64) &&
+             isOptionalStringWithin(data, 'description', 20000) &&
+             isOptionalStringWithin(data, 'objective', 10000);
     }
 
     function isValidTask(data) {
-      return data.title is string && data.title.size() > 0 && data.title.size() <= 300 &&
-             data.projectId is string && data.projectId.size() <= 128 &&
-             data.status is string && data.status.size() <= 50;
+      return data.keys().hasAll([
+               'title', 'projectId', 'status', 'priority', 'createdAt', 'updatedAt'
+             ]) &&
+             isNonEmptyString(data.title, 300) &&
+             isValidId(data.projectId) &&
+             isNonEmptyString(data.status, 50) &&
+             isNonEmptyString(data.priority, 50) &&
+             isNonEmptyString(data.createdAt, 64) &&
+             isNonEmptyString(data.updatedAt, 64) &&
+             isOptionalStringWithin(data, 'description', 20000);
     }
 
     function isValidSession(data) {
-      return data.projectId is string && data.projectId.size() <= 128 &&
-             data.status is string && data.status.size() <= 50 &&
-             data.objective is string && data.objective.size() <= 5000;
+      return data.keys().hasAll([
+               'projectId', 'status', 'objective', 'startedAt'
+             ]) &&
+             isValidId(data.projectId) &&
+             isNonEmptyString(data.status, 50) &&
+             isNonEmptyString(data.objective, 5000) &&
+             isNonEmptyString(data.startedAt, 64) &&
+             isOptionalStringWithin(data, 'workDone', 20000) &&
+             isOptionalStringWithin(data, 'testsDone', 20000) &&
+             isOptionalStringWithin(data, 'decisionsTaken', 20000);
     }
 
     function isValidEnvironment(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
-             data.projectId is string && data.projectId.size() <= 128;
+      return data.keys().hasAll([
+               'name', 'projectId', 'service', 'account', 'status'
+             ]) &&
+             isNonEmptyString(data.name, 200) &&
+             isValidId(data.projectId) &&
+             isNonEmptyString(data.service, 200) &&
+             isNonEmptyString(data.account, 320) &&
+             isNonEmptyString(data.status, 100) &&
+             isOptionalStringWithin(data, 'observations', 20000);
     }
 
     function isValidHistory(data) {
-      return data.title is string && data.title.size() > 0 && data.title.size() <= 300 &&
-             data.category is string && data.category.size() <= 100;
+      return data.keys().hasAll([
+               'title', 'category', 'timestamp'
+             ]) &&
+             isNonEmptyString(data.title, 300) &&
+             isNonEmptyString(data.category, 100) &&
+             isNonEmptyString(data.timestamp, 64) &&
+             isOptionalStringWithin(data, 'description', 20000) &&
+             isOptionalStringWithin(data, 'details', 20000);
     }
 
     function isValidProjectUpdate(data) {
-      return data.projectId is string && data.projectId.size() <= 128 &&
-             data.schemaVersion is string && data.schemaVersion.size() <= 50;
+      return data.keys().hasAll([
+               'projectId', 'schemaVersion', 'createdAt', 'appliedAt'
+             ]) &&
+             isValidId(data.projectId) &&
+             isNonEmptyString(data.schemaVersion, 50) &&
+             isNonEmptyString(data.createdAt, 64) &&
+             isNonEmptyString(data.appliedAt, 64) &&
+             isOptionalStringWithin(data, 'summary', 20000) &&
+             isOptionalStringWithin(data, 'originalJson', 250000) &&
+             isOptionalStringWithin(data, 'rawJson', 250000);
     }
 
     // Projects collection: exclusive to authorized operator
@@ -122,5 +176,3 @@ service cloud.firestore {
     }
   }
 }
-
-
