@@ -1,0 +1,115 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOperator() {
+      return isSignedIn() && (
+        request.auth.token.email == 'codex.martis.dev@gmail.com' ||
+        (request.auth.token.keys().hasAll(['email_verified']) && request.auth.token.email_verified == true)
+      );
+    }
+
+    // Entity Validators
+    function isValidProject(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.identifier is string && data.identifier.size() <= 100 &&
+             data.status is string && data.status.size() <= 50 &&
+             data.progress is number && data.progress >= 0 && data.progress <= 100;
+    }
+
+    function isValidTask(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() <= 300 &&
+             data.projectId is string && data.projectId.size() <= 128 &&
+             data.status is string && data.status.size() <= 50;
+    }
+
+    function isValidSession(data) {
+      return data.projectId is string && data.projectId.size() <= 128 &&
+             data.status is string && data.status.size() <= 50 &&
+             data.objective is string && data.objective.size() <= 5000;
+    }
+
+    function isValidEnvironment(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.projectId is string && data.projectId.size() <= 128;
+    }
+
+    function isValidHistory(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() <= 300 &&
+             data.category is string && data.category.size() <= 100;
+    }
+
+    function isValidProjectUpdate(data) {
+      return data.projectId is string && data.projectId.size() <= 128 &&
+             data.schemaVersion is string && data.schemaVersion.size() <= 50;
+    }
+
+    // Projects collection: readable by all, writable by operator
+    match /projects/{projectId} {
+      allow get, list: if true;
+      allow create: if isOperator() && isValidId(projectId) && isValidProject(incoming());
+      allow update: if isOperator() && isValidId(projectId) && isValidProject(incoming());
+      allow delete: if isOperator() && isValidId(projectId);
+    }
+
+    // Tasks collection: readable by all, writable by operator
+    match /tasks/{taskId} {
+      allow get, list: if true;
+      allow create: if isOperator() && isValidId(taskId) && isValidTask(incoming());
+      allow update: if isOperator() && isValidId(taskId) && isValidTask(incoming());
+      allow delete: if isOperator() && isValidId(taskId);
+    }
+
+    // Sessions collection: readable by all, writable by operator
+    match /sessions/{sessionId} {
+      allow get, list: if true;
+      allow create: if isOperator() && isValidId(sessionId) && isValidSession(incoming());
+      allow update: if isOperator() && isValidId(sessionId) && isValidSession(incoming());
+      allow delete: if isOperator() && isValidId(sessionId);
+    }
+
+    // Environments collection: readable by all, writable by operator
+    match /environments/{environmentId} {
+      allow get, list: if true;
+      allow create: if isOperator() && isValidId(environmentId) && isValidEnvironment(incoming());
+      allow update: if isOperator() && isValidId(environmentId) && isValidEnvironment(incoming());
+      allow delete: if isOperator() && isValidId(environmentId);
+    }
+
+    // History collection: readable by all, writable by operator
+    match /history/{historyId} {
+      allow get, list: if true;
+      allow create: if isOperator() && isValidId(historyId) && isValidHistory(incoming());
+      allow update: if isOperator() && isValidId(historyId) && isValidHistory(incoming());
+      allow delete: if isOperator() && isValidId(historyId);
+    }
+
+    // Project Updates collection: readable by all, writable by operator
+    match /projectUpdates/{updateId} {
+      allow get, list: if true;
+      allow create: if isOperator() && isValidId(updateId) && isValidProjectUpdate(incoming());
+      allow update: if isOperator() && isValidId(updateId) && isValidProjectUpdate(incoming());
+      allow delete: if isOperator() && isValidId(updateId);
+    }
+
+    // Test connection doc (for healthcheck testConnection())
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+  }
+}
+
+

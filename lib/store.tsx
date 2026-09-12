@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   Project,
   Task,
@@ -39,6 +39,28 @@ import {
   ProjectUpdateDiff,
 } from './projectUpdate';
 import { ProjectImportSchema1 } from './types';
+import {
+  saveProjectToFirestore,
+  updateProjectInFirestore,
+  deleteProjectFromFirestore,
+  subscribeToProjects,
+  saveTaskToFirestore,
+  updateTaskInFirestore,
+  deleteTaskFromFirestore,
+  subscribeToTasks,
+  saveSessionToFirestore,
+  subscribeToSessions,
+  saveEnvironmentToFirestore,
+  updateEnvironmentInFirestore,
+  deleteEnvironmentFromFirestore,
+  subscribeToEnvironments,
+  saveHistoryEventToFirestore,
+  subscribeToHistory,
+  saveProjectUpdateToFirestore,
+  subscribeToProjectUpdates,
+  seedInitialDataToFirestore,
+  testConnection,
+} from './firebase/firestore';
 
 // Default prompt template for Codex Martis v1.0
 const DEFAULT_GLOBAL_PROMPT_TEMPLATE = DEFAULT_PROJECT_UPDATE_PROMPT;
@@ -664,6 +686,11 @@ interface StoreContextType {
   loadDemoData: () => void;
   resetToInitialSeed: () => void;
   resetAllDataToDefault: () => void;
+
+  // Cloud Firestore Sync
+  isFirestoreConnected: boolean;
+  isFirestoreSyncing: boolean;
+  syncDataToFirestore: () => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -830,6 +857,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [authError, setAuthError] = useState<string | null>(null);
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [isFirestoreConnected, setIsFirestoreConnected] = useState<boolean>(false);
+  const [isFirestoreSyncing, setIsFirestoreSyncing] = useState<boolean>(false);
+
+  // Keep a fresh reference to collections to avoid stale closures in listeners
+  const dataRefs = useRef({
+    projects,
+    tasks,
+    environments,
+    history,
+    sessions,
+  });
+
+  useEffect(() => {
+    dataRefs.current = {
+      projects,
+      tasks,
+      environments,
+      history,
+      sessions,
+    };
+  }, [projects, tasks, environments, history, sessions]);
 
   // Subscribe to real Firebase Auth state changes
   useEffect(() => {
@@ -848,6 +896,93 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       unsubscribe();
     };
   }, []);
+
+  // Connect and synchronize real-time with Cloud Firestore
+  useEffect(() => {
+    testConnection().then((connected) => {
+      setIsFirestoreConnected(connected);
+    });
+
+    // Subscribe to projects in Cloud Firestore
+    const unsubProjects = subscribeToProjects(
+      (firestoreProjects) => {
+        if (firestoreProjects && firestoreProjects.length > 0) {
+          setProjects(firestoreProjects);
+          setIsFirestoreConnected(true);
+        } else {
+          // If Firestore is empty, attempt initial seed
+          const currentData = dataRefs.current;
+          seedInitialDataToFirestore(
+            currentData.projects.length > 0 ? currentData.projects : INITIAL_PROJECTS,
+            currentData.tasks.length > 0 ? currentData.tasks : INITIAL_TASKS,
+            currentData.environments.length > 0 ? currentData.environments : INITIAL_ENVIRONMENTS,
+            currentData.history.length > 0 ? currentData.history : INITIAL_HISTORY,
+            currentData.sessions.length > 0 ? currentData.sessions : INITIAL_SESSIONS
+          ).catch((e) => console.warn('Falha na inicialização do Firestore:', e));
+        }
+      },
+      (err) => console.warn('Aviso de conexão do Firestore (projetos):', err)
+    );
+
+    const unsubTasks = subscribeToTasks((firestoreTasks) => {
+      if (firestoreTasks && firestoreTasks.length > 0) {
+        setTasks(firestoreTasks);
+      }
+    });
+
+    const unsubEnvs = subscribeToEnvironments((firestoreEnvs) => {
+      if (firestoreEnvs && firestoreEnvs.length > 0) {
+        setEnvironments(firestoreEnvs);
+      }
+    });
+
+    const unsubSessions = subscribeToSessions((firestoreSessions) => {
+      if (firestoreSessions && firestoreSessions.length > 0) {
+        setSessions(firestoreSessions);
+      }
+    });
+
+    const unsubHistory = subscribeToHistory((firestoreHistory) => {
+      if (firestoreHistory && firestoreHistory.length > 0) {
+        setHistory(firestoreHistory);
+      }
+    });
+
+    const unsubUpdates = subscribeToProjectUpdates((firestoreUpdates) => {
+      if (firestoreUpdates && firestoreUpdates.length > 0) {
+        setProjectUpdates(firestoreUpdates);
+      }
+    });
+
+    return () => {
+      unsubProjects();
+      unsubTasks();
+      unsubEnvs();
+      unsubSessions();
+      unsubHistory();
+      unsubUpdates();
+    };
+  }, []);
+
+  // Synchronize initial data to Cloud Firestore once operator authenticates
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.email === AUTHORIZED_OPERATOR_EMAIL) {
+      testConnection().then((connected) => {
+        setIsFirestoreConnected(connected);
+        if (connected) {
+          const currentData = dataRefs.current;
+          seedInitialDataToFirestore(
+            currentData.projects.length > 0 ? currentData.projects : INITIAL_PROJECTS,
+            currentData.tasks.length > 0 ? currentData.tasks : INITIAL_TASKS,
+            currentData.environments.length > 0 ? currentData.environments : INITIAL_ENVIRONMENTS,
+            currentData.history.length > 0 ? currentData.history : INITIAL_HISTORY,
+            currentData.sessions.length > 0 ? currentData.sessions : INITIAL_SESSIONS
+          ).catch((e) => console.warn('Falha na sincronização ao autenticar no Firestore:', e));
+        }
+      });
+    }
+  }, [isAuthenticated, currentUser?.email]);
+
 
   // Sync operational data to localStorage (Auth is strictly managed by Firebase)
   useEffect(() => {
@@ -879,6 +1014,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       user: currentUser?.name || 'Marco Aquino',
     };
     setHistory((prev) => [newEvent, ...prev]);
+    saveHistoryEventToFirestore(newEvent).catch((err) =>
+      console.warn('Falha ao gravar evento de histórico no Cloud Firestore:', err)
+    );
   };
 
   // Next Mission Derivation
@@ -929,6 +1067,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updatedAt: now,
       };
       setTasks((prev) => [initialTask, ...prev]);
+      saveTaskToFirestore(initialTask).catch((err) =>
+        console.warn('Falha ao gravar tarefa inicial no Firestore:', err)
+      );
     }
 
     const newProject: Project = {
@@ -960,6 +1101,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       updatedAt: now,
     };
     setProjects((prev) => [newProject, ...prev]);
+    saveProjectToFirestore(newProject).catch((err) =>
+      console.warn('Falha ao gravar projeto no Cloud Firestore:', err)
+    );
 
     addHistoryEvent({
       type: 'PROJECT_CREATED',
@@ -988,6 +1132,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return p;
       })
     );
+    updateProjectInFirestore(id, updates).catch((err) =>
+      console.warn('Falha ao atualizar projeto no Cloud Firestore:', err)
+    );
 
     const project = projects.find((p) => p.id === id);
     if (project) {
@@ -1005,6 +1152,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const deleteProject = (id: string) => {
     const p = projects.find((x) => x.id === id);
     setProjects((prev) => prev.filter((x) => x.id !== id));
+    deleteProjectFromFirestore(id).catch((err) =>
+      console.warn('Falha ao deletar projeto do Cloud Firestore:', err)
+    );
     if (p) {
       addHistoryEvent({
         type: 'PROJECT_UPDATED',
@@ -1027,10 +1177,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       updatedAt: now,
     };
     setTasks((prev) => [newTask, ...prev]);
+    saveTaskToFirestore(newTask).catch((err) =>
+      console.warn('Falha ao gravar tarefa no Cloud Firestore:', err)
+    );
 
     // Update project updatedAt
     setProjects((prev) =>
       prev.map((p) => (p.id === data.projectId ? { ...p, updatedAt: now } : p))
+    );
+    updateProjectInFirestore(data.projectId, { updatedAt: now }).catch((err) =>
+      console.warn('Falha ao sincronizar timestamp do projeto no Firestore:', err)
     );
 
     addHistoryEvent({
@@ -1063,6 +1219,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return t;
       })
     );
+    updateTaskInFirestore(id, updates).catch((err) =>
+      console.warn('Falha ao atualizar tarefa no Cloud Firestore:', err)
+    );
 
     if (updatedTaskObj) {
       const task = updatedTaskObj;
@@ -1073,6 +1232,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           prev.map((p) =>
             p.id === task.projectId ? { ...p, nextTaskTitle: updates.title, updatedAt: now } : p
           )
+        );
+        updateProjectInFirestore(task.projectId, { nextTaskTitle: updates.title }).catch((err) =>
+          console.warn('Falha ao atualizar título da missão no projeto via Firestore:', err)
         );
       }
 
@@ -1101,11 +1263,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setProjects((prev) =>
         prev.map((p) => (p.id === task.projectId ? { ...p, updatedAt: now } : p))
       );
+      updateProjectInFirestore(task.projectId, { updatedAt: now }).catch((err) =>
+        console.warn('Falha ao atualizar timestamp do projeto no Firestore:', err)
+      );
     }
   };
 
   const deleteTask = (id: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== id));
+    deleteTaskFromFirestore(id).catch((err) =>
+      console.warn('Falha ao deletar tarefa do Cloud Firestore:', err)
+    );
   };
 
   const setTaskAsNextMission = (projectId: string, taskId: string) => {
@@ -1123,6 +1291,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return t;
       })
     );
+    updateTaskInFirestore(taskId, { isNextMission: true }).catch((err) =>
+      console.warn('Falha ao definir isNextMission no Firestore:', err)
+    );
 
     // Update project nextTaskId and nextTaskTitle
     setProjects((prev) =>
@@ -1137,6 +1308,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         return p;
       })
+    );
+    updateProjectInFirestore(projectId, {
+      nextTaskId: taskId,
+      nextTaskTitle: task.title,
+      updatedAt: now,
+    }).catch((err) =>
+      console.warn('Falha ao atualizar próxima missão do projeto no Firestore:', err)
     );
 
     addHistoryEvent({
@@ -1231,6 +1409,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Update sessions list
     setSessions((prev) => [finishedSession, ...prev.filter((s) => s.id !== session.id)]);
     setActiveSession(null);
+    saveSessionToFirestore(finishedSession).catch((err) =>
+      console.warn('Falha ao gravar sessão encerrada no Cloud Firestore:', err)
+    );
 
     // If a task was marked as completed
     if (details.completedTaskId) {
@@ -1250,6 +1431,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           }
           return p;
         })
+      );
+      updateProjectInFirestore(session.projectId, {
+        nextTaskTitle: details.newNextMission!,
+        updatedAt: nowIso,
+      }).catch((err) =>
+        console.warn('Falha ao atualizar próxima missão no Firestore:', err)
       );
     }
 
@@ -1315,6 +1502,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       updatedAt: now,
     };
     setEnvironments((prev) => [newEnv, ...prev]);
+    saveEnvironmentToFirestore(newEnv).catch((err) =>
+      console.warn('Falha ao gravar ambiente no Cloud Firestore:', err)
+    );
 
     addHistoryEvent({
       type: 'ENVIRONMENT_CREATED',
@@ -1337,10 +1527,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setEnvironments((prev) =>
       prev.map((e) => (e.id === id ? { ...e, ...updates, updatedAt: now } : e))
     );
+    updateEnvironmentInFirestore(id, updates).catch((err) =>
+      console.warn('Falha ao atualizar ambiente no Cloud Firestore:', err)
+    );
   };
 
   const deleteEnvironment = (id: string) => {
     setEnvironments((prev) => prev.filter((e) => e.id !== id));
+    deleteEnvironmentFromFirestore(id).catch((err) =>
+      console.warn('Falha ao deletar ambiente do Cloud Firestore:', err)
+    );
   };
 
   // Prompt Generator
@@ -1411,20 +1607,39 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setProjects((prev) =>
       prev.map((p) => (p.id === projectId ? { ...result.updatedProject, updatedAt: now } : p))
     );
+    saveProjectToFirestore({ ...result.updatedProject, updatedAt: now }).catch((err) =>
+      console.warn('Falha ao salvar projeto atualizado via JSON no Cloud Firestore:', err)
+    );
 
     // 2. Update Tasks
     setTasks([...result.updatedTasks, ...otherTasks]);
+    for (const t of result.updatedTasks) {
+      saveTaskToFirestore(t).catch((err) =>
+        console.warn('Falha ao salvar tarefa via JSON no Cloud Firestore:', err)
+      );
+    }
 
     // 3. Update Environments
     setEnvironments([...result.updatedEnvironments, ...otherEnvs]);
+    for (const e of result.updatedEnvironments) {
+      saveEnvironmentToFirestore(e).catch((err) =>
+        console.warn('Falha ao salvar ambiente via JSON no Cloud Firestore:', err)
+      );
+    }
 
     // 4. Save Session if recorded
     if (result.newSession) {
       setSessions((prev) => [result.newSession!, ...prev]);
+      saveSessionToFirestore(result.newSession).catch((err) =>
+        console.warn('Falha ao salvar sessão via JSON no Cloud Firestore:', err)
+      );
     }
 
     // 5. Save ProjectUpdate entity
     setProjectUpdates((prev) => [result.newProjectUpdate, ...prev]);
+    saveProjectUpdateToFirestore(result.newProjectUpdate).catch((err) =>
+      console.warn('Falha ao salvar registro de atualização no Cloud Firestore:', err)
+    );
 
     // 6. Record all generated history events
     for (const evt of result.historyEvents) {
@@ -1452,15 +1667,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       // Add Project
       setProjects((prev) => [newProj, ...prev]);
+      saveProjectToFirestore(newProj).catch((err) =>
+        console.warn('Falha ao gravar projeto importado no Cloud Firestore:', err)
+      );
 
       // Add Tasks
       if (newTasks.length > 0) {
         setTasks((prev) => [...newTasks, ...prev]);
+        for (const t of newTasks) {
+          saveTaskToFirestore(t).catch((err) =>
+            console.warn('Falha ao gravar tarefa importada no Cloud Firestore:', err)
+          );
+        }
       }
 
       // Add Environments
       if (newEnvs.length > 0) {
         setEnvironments((prev) => [...newEnvs, ...prev]);
+        for (const e of newEnvs) {
+          saveEnvironmentToFirestore(e).catch((err) =>
+            console.warn('Falha ao gravar ambiente importado no Cloud Firestore:', err)
+          );
+        }
       }
 
       // Add History Event
@@ -1587,6 +1815,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const syncDataToFirestore = async () => {
+    setIsFirestoreSyncing(true);
+    try {
+      await seedInitialDataToFirestore(
+        projects.length > 0 ? projects : INITIAL_PROJECTS,
+        tasks.length > 0 ? tasks : INITIAL_TASKS,
+        environments.length > 0 ? environments : INITIAL_ENVIRONMENTS,
+        history.length > 0 ? history : INITIAL_HISTORY,
+        sessions.length > 0 ? sessions : INITIAL_SESSIONS
+      );
+      setIsFirestoreConnected(true);
+    } catch (err) {
+      console.warn('Erro ao forçar sincronização com Firestore:', err);
+    } finally {
+      setIsFirestoreSyncing(false);
+    }
+  };
+
   return (
     <StoreContext.Provider
       value={{
@@ -1638,6 +1884,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         loadDemoData,
         resetToInitialSeed,
         resetAllDataToDefault: resetToInitialSeed,
+        isFirestoreConnected,
+        isFirestoreSyncing,
+        syncDataToFirestore,
       }}
     >
       {children}

@@ -1,0 +1,323 @@
+{
+  "entities": {
+    "Project": {
+      "title": "Project",
+      "description": "Entity representing a project tracked in Codex Martis",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "identifier": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 5000
+        },
+        "type": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "status": {
+          "type": "string",
+          "maxLength": 50,
+          "enum": ["planejamento", "desenvolvimento", "teste", "producao", "pausado", "encerrado"]
+        },
+        "phase": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "health": {
+          "type": "string",
+          "maxLength": 50,
+          "enum": ["saudavel", "atencao", "bloqueado", "nao_avaliado"]
+        },
+        "progress": {
+          "type": "number"
+        },
+        "objective": {
+          "type": "string",
+          "maxLength": 5000
+        },
+        "nextTaskId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "nextTaskTitle": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "nextTaskWhyImportant": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "priority": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "mainAccount": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "identifier", "status", "phase", "health", "progress"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Entity representing a task or mission within a project",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "projectId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "projectName": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 5000
+        },
+        "type": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "priority": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "status": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "assignedTo": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["projectId", "title", "status", "priority"]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "Entity representing a developer work session",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "sessionNumber": {
+          "type": "number"
+        },
+        "projectId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "projectName": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "objective": {
+          "type": "string",
+          "maxLength": 5000
+        },
+        "status": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "endedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["projectId", "objective", "status", "startedAt"]
+    },
+    "Environment": {
+      "title": "Environment",
+      "description": "Entity representing an environment or cloud service for a project",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "projectId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "projectName": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "service": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "account": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "status": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "url": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["projectId", "name", "service", "account", "status"]
+    },
+    "HistoryEvent": {
+      "title": "HistoryEvent",
+      "description": "Entity representing an audit log event, commit, deploy, or decision",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "type": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "projectId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "projectName": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 5000
+        },
+        "user": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "timestamp": {
+          "type": "string",
+          "maxLength": 100
+        }
+      },
+      "required": ["title", "category", "timestamp"]
+    },
+    "ProjectUpdate": {
+      "title": "ProjectUpdate",
+      "description": "Entity representing an incremental AI project update patch",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "projectId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "projectName": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "schemaVersion": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "appliedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["projectId", "schemaVersion", "appliedAt"]
+    }
+  },
+  "firestore": {
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Stores projects managed in Codex Martis"
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Stores tasks associated with projects"
+    },
+    "/sessions/{sessionId}": {
+      "schema": "Session",
+      "description": "Stores developer work sessions"
+    },
+    "/environments/{environmentId}": {
+      "schema": "Environment",
+      "description": "Stores environment configurations for projects"
+    },
+    "/history/{historyId}": {
+      "schema": "HistoryEvent",
+      "description": "Stores audit and operational history log events"
+    },
+    "/projectUpdates/{updateId}": {
+      "schema": "ProjectUpdate",
+      "description": "Stores project update patches"
+    }
+  }
+}

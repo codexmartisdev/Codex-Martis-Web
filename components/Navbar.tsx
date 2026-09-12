@@ -16,6 +16,8 @@ import {
   ChevronDown,
   CheckCircle2,
   AlertTriangle,
+  Database,
+  RefreshCw,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -32,7 +34,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenProject,
 }) => {
   const triggerSearch = onOpenCommandPalette || onOpenSearch || (() => {});
-  const { currentUser, logout, activeSession, resetToInitialSeed, exportDatabaseJson, history } = useStore();
+  const {
+    currentUser,
+    logout,
+    activeSession,
+    resetToInitialSeed,
+    exportDatabaseJson,
+    history,
+    isFirestoreConnected,
+    isFirestoreSyncing,
+    syncDataToFirestore,
+  } = useStore();
   const [currentDateTime, setCurrentDateTime] = useState<string>('01 de set. de 2026 • 08:45');
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
@@ -80,6 +92,30 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-2 px-2.5 py-1 rounded bg-[#101014] border border-[#232328] text-xs font-mono-code text-[#C5C5CB]">
           <Clock className="w-3.5 h-3.5 text-[#E84A32]" />
           <span>{currentDateTime}</span>
+        </div>
+
+        {/* Firestore Cloud Persistence Indicator */}
+        <div
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-xs font-mono-code transition-colors ${
+            isFirestoreConnected
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+              : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+          }`}
+          title={isFirestoreConnected ? 'Cloud Firestore conectado e sincronizado em tempo real' : 'Conectando ao Cloud Firestore...'}
+        >
+          <Database className="w-3.5 h-3.5" />
+          <span className="hidden lg:inline">
+            {isFirestoreSyncing ? 'Sincronizando...' : isFirestoreConnected ? 'Firestore Conectado' : 'Firestore Conectando...'}
+          </span>
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              isFirestoreSyncing
+                ? 'bg-amber-400 animate-ping'
+                : isFirestoreConnected
+                ? 'bg-emerald-400'
+                : 'bg-amber-400 animate-pulse'
+            }`}
+          />
         </div>
 
         {/* Live Active Session Indicator Pill */}
@@ -217,6 +253,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <RotateCcw className="w-4 h-4 text-amber-400" />
                 <span>Restaurar Dados Demo</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  syncDataToFirestore();
+                  setShowProfileMenu(false);
+                }}
+                disabled={isFirestoreSyncing}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-emerald-400 hover:bg-emerald-500/10 rounded-md transition-colors text-left disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${isFirestoreSyncing ? 'animate-spin' : ''}`} />
+                <span>{isFirestoreSyncing ? 'Sincronizando...' : 'Sincronizar Cloud Firestore'}</span>
               </button>
 
               <div className="border-t border-[#232328] my-1.5" />
