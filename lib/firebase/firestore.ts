@@ -22,6 +22,9 @@ import {
   ProjectUpdate,
 } from '../types';
 
+const ALLOW_INITIAL_FIRESTORE_SEED =
+  process.env.NEXT_PUBLIC_ALLOW_FIRESTORE_SEED === 'true';
+
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
@@ -403,6 +406,13 @@ export async function seedInitialDataToFirestore(
   history: HistoryEvent[],
   sessions: Session[]
 ): Promise<void> {
+  if (!ALLOW_INITIAL_FIRESTORE_SEED) {
+    console.warn(
+      'Codex Martis: initial Firestore seed blocked. Set NEXT_PUBLIC_ALLOW_FIRESTORE_SEED=true only for an intentional migration.'
+    );
+    return;
+  }
+
   try {
     const existing = await getDocs(collection(db, PROJECTS_COLLECTION));
     if (!existing.empty) {
