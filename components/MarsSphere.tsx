@@ -20,13 +20,25 @@ export const MarsSphere: React.FC<MarsSphereProps> = ({
     >
       {/* Ambient Red Atmospheric Glow behind Mars */}
       <div
-        className="absolute inset-0 rounded-full bg-radial from-[#E84A32]/40 via-[#7D1A12]/15 to-transparent blur-3xl pointer-events-none"
+        className="absolute inset-0 rounded-full bg-radial from-[#E84A32]/40 via-[#7D1A12]/15 to-transparent blur-3xl pointer-events-none mars-atmosphere-pulse"
         style={{ transform: 'scale(1.2)' }}
       />
 
+      {withReticle && (
+        <div
+          className="absolute inset-[8%] rounded-full animate-spin-slow pointer-events-none opacity-60"
+          style={{
+            background:
+              'conic-gradient(from 18deg, transparent 0deg, rgba(232,74,50,0.02) 8deg, rgba(232,74,50,0.18) 18deg, rgba(255,122,89,0.04) 34deg, transparent 52deg)',
+            maskImage: 'radial-gradient(circle, transparent 0 56%, black 61% 70%, transparent 76%)',
+            WebkitMaskImage: 'radial-gradient(circle, transparent 0 56%, black 61% 70%, transparent 76%)',
+          }}
+        />
+      )}
+
       <svg
         viewBox="0 0 400 400"
-        className="w-full h-full drop-shadow-[0_0_40px_rgba(232,74,50,0.3)]"
+        className="w-full h-full drop-shadow-[0_0_40px_rgba(232,74,50,0.3)] relative z-10"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
@@ -53,21 +65,26 @@ export const MarsSphere: React.FC<MarsSphereProps> = ({
         {withReticle && (
           <>
             {/* Outer Orbit HUD Arcs */}
-            <circle cx="200" cy="200" r="188" stroke="#E84A32" strokeWidth="1" strokeOpacity="0.25" />
-            <circle cx="200" cy="200" r="180" stroke="#E84A32" strokeWidth="1.2" strokeDasharray="4 8" strokeOpacity="0.5" />
-            <circle cx="200" cy="200" r="165" stroke="#7D1A12" strokeWidth="0.8" strokeOpacity="0.4" />
+            <g className="mars-reticle-ring">
+              <circle cx="200" cy="200" r="188" stroke="#E84A32" strokeWidth="1" strokeOpacity="0.25" />
+              <circle cx="200" cy="200" r="180" stroke="#E84A32" strokeWidth="1.2" strokeDasharray="4 8" strokeOpacity="0.5" />
 
-            {/* Orbit Target Notches */}
-            <circle cx="200" cy="12" r="3.5" stroke="#E84A32" strokeWidth="1.5" fill="#050505" />
-            <circle cx="200" cy="388" r="3.5" stroke="#E84A32" strokeWidth="1.5" fill="#050505" />
-            <circle cx="12" cy="200" r="3.5" stroke="#E84A32" strokeWidth="1.5" fill="#050505" />
-            <circle cx="388" cy="200" r="3.5" stroke="#E84A32" strokeWidth="1.5" fill="#050505" />
+              {/* Orbit Target Notches */}
+              <circle cx="200" cy="12" r="3.5" stroke="#E84A32" strokeWidth="1.5" fill="#050505" />
+              <circle cx="200" cy="388" r="3.5" stroke="#E84A32" strokeWidth="1.5" fill="#050505" />
+              <circle cx="12" cy="200" r="3.5" stroke="#E84A32" strokeWidth="1.5" fill="#050505" />
+              <circle cx="388" cy="200" r="3.5" stroke="#E84A32" strokeWidth="1.5" fill="#050505" />
+            </g>
 
-            {/* Diagonal Tech Crosshairs */}
-            <line x1="45" y1="45" x2="65" y2="65" stroke="#E84A32" strokeWidth="1.5" strokeOpacity="0.7" />
-            <line x1="355" y1="45" x2="335" y2="65" stroke="#E84A32" strokeWidth="1.5" strokeOpacity="0.7" />
-            <line x1="45" y1="355" x2="65" y2="335" stroke="#E84A32" strokeWidth="1.5" strokeOpacity="0.7" />
-            <line x1="355" y1="355" x2="335" y2="335" stroke="#E84A32" strokeWidth="1.5" strokeOpacity="0.7" />
+            <g className="mars-reticle-ring-reverse">
+              <circle cx="200" cy="200" r="165" stroke="#7D1A12" strokeWidth="0.8" strokeDasharray="18 9 3 9" strokeOpacity="0.55" />
+
+              {/* Diagonal Tech Crosshairs */}
+              <line x1="45" y1="45" x2="65" y2="65" stroke="#E84A32" strokeWidth="1.5" strokeOpacity="0.7" />
+              <line x1="355" y1="45" x2="335" y2="65" stroke="#E84A32" strokeWidth="1.5" strokeOpacity="0.7" />
+              <line x1="45" y1="355" x2="65" y2="335" stroke="#E84A32" strokeWidth="1.5" strokeOpacity="0.7" />
+              <line x1="355" y1="355" x2="335" y2="335" stroke="#E84A32" strokeWidth="1.5" strokeOpacity="0.7" />
+            </g>
           </>
         )}
 
