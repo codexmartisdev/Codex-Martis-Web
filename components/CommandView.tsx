@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { useStore } from '@/lib/store';
 import {
   FolderKanban,
@@ -8,18 +9,13 @@ import {
   Rocket,
   Lock,
   Target,
-  ArrowRight,
   CheckCircle2,
   AlertTriangle,
   Clock,
-  ShieldCheck,
   ChevronRight,
-  Flame,
   Globe,
   Shield,
   Cog,
-  FileCheck,
-  Sparkles,
   Users,
 } from 'lucide-react';
 
@@ -32,16 +28,22 @@ export const CommandView: React.FC<CommandViewProps> = ({
   onNavigateTab,
   onOpenProject,
 }) => {
-  const { projects, history, tasks, startSession, getProjectNextMissionTitle } = useStore();
+  const { projects, history, getProjectNextMissionTitle } = useStore();
+  const reduceMotion = useReducedMotion();
 
-  // Metrics calculation
   const totalActive = projects.filter((p) => p.status !== 'encerrado' && p.status !== 'pausado').length;
   const inDevelopment = projects.filter((p) => p.status === 'desenvolvimento').length;
   const inProduction = projects.filter((p) => p.status === 'producao').length;
   const blockedOrAttention = projects.filter((p) => p.health === 'atencao' || p.health === 'bloqueado').length;
 
-  // Primary project in focus (default to first active project)
   const focusProject = projects.find((p) => p.id === 'advodesk') || projects[0] || null;
+
+  const metrics = [
+    { label: 'Projetos Ativos', value: totalActive, icon: FolderKanban },
+    { label: 'Em Desenvolvimento', value: inDevelopment, icon: Code2 },
+    { label: 'Em Produção', value: inProduction, icon: Rocket },
+    { label: 'Bloqueados', value: blockedOrAttention, icon: Lock },
+  ];
 
   const getProjectIcon = (name: string, type: string) => {
     if (name.includes('AdvoDesk') || name.includes('Emprovium')) {
@@ -124,10 +126,10 @@ export const CommandView: React.FC<CommandViewProps> = ({
   return (
     <div className="space-y-6 pb-12">
       {/* Top Header */}
-      <div>
+      <div className="animate-in fade-in slide-in-from-top-2 duration-300">
         <h1 className="text-2xl font-bold tracking-[0.2em] font-heading text-[#F2F2F3] uppercase flex items-center gap-2">
           COMMAND
-          <span className="inline-block w-8 h-[2px] bg-[#E84A32]" />
+          <span className="inline-block w-8 h-[2px] bg-[#E84A32] shadow-[0_0_9px_rgba(232,74,50,0.65)]" />
         </h1>
         <p className="text-xs text-[#808088] mt-1 font-mono-code">
           Central de comando dos seus projetos
@@ -136,65 +138,34 @@ export const CommandView: React.FC<CommandViewProps> = ({
 
       {/* 4 Metric Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {/* Projetos Ativos */}
-        <div className="bg-[#0C0C0E] border border-[#232328] rounded-xl p-4 flex items-center gap-4 relative overflow-hidden group hover:border-[#383842] transition-colors">
-          <div className="w-11 h-11 rounded-lg bg-[#141418] border border-[#2E2E38] flex items-center justify-center text-[#E84A32]">
-            <FolderKanban className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold text-[#808088] tracking-wider uppercase font-heading">
-              Projetos Ativos
-            </p>
-            <p className="text-2xl font-black font-heading text-[#F2F2F3] mt-0.5">
-              {totalActive}
-            </p>
-          </div>
-        </div>
-
-        {/* Em Desenvolvimento */}
-        <div className="bg-[#0C0C0E] border border-[#232328] rounded-xl p-4 flex items-center gap-4 relative overflow-hidden group hover:border-[#383842] transition-colors">
-          <div className="w-11 h-11 rounded-lg bg-[#141418] border border-[#2E2E38] flex items-center justify-center text-[#E84A32]">
-            <Code2 className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold text-[#808088] tracking-wider uppercase font-heading">
-              Em Desenvolvimento
-            </p>
-            <p className="text-2xl font-black font-heading text-[#F2F2F3] mt-0.5">
-              {inDevelopment}
-            </p>
-          </div>
-        </div>
-
-        {/* Em Produção */}
-        <div className="bg-[#0C0C0E] border border-[#232328] rounded-xl p-4 flex items-center gap-4 relative overflow-hidden group hover:border-[#383842] transition-colors">
-          <div className="w-11 h-11 rounded-lg bg-[#141418] border border-[#2E2E38] flex items-center justify-center text-[#E84A32]">
-            <Rocket className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold text-[#808088] tracking-wider uppercase font-heading">
-              Em Produção
-            </p>
-            <p className="text-2xl font-black font-heading text-[#F2F2F3] mt-0.5">
-              {inProduction}
-            </p>
-          </div>
-        </div>
-
-        {/* Bloqueados / Atenção */}
-        <div className="bg-[#0C0C0E] border border-[#232328] rounded-xl p-4 flex items-center gap-4 relative overflow-hidden group hover:border-[#383842] transition-colors">
-          <div className="w-11 h-11 rounded-lg bg-[#141418] border border-[#2E2E38] flex items-center justify-center text-[#E84A32]">
-            <Lock className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold text-[#808088] tracking-wider uppercase font-heading">
-              Bloqueados
-            </p>
-            <p className="text-2xl font-black font-heading text-[#F2F2F3] mt-0.5">
-              {blockedOrAttention}
-            </p>
-          </div>
-        </div>
+        {metrics.map((metric, index) => {
+          const Icon = metric.icon;
+          return (
+            <motion.button
+              key={metric.label}
+              type="button"
+              onClick={() => onNavigateTab('projetos')}
+              initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: reduceMotion ? 0 : 0.24, delay: reduceMotion ? 0 : index * 0.045 }}
+              whileHover={reduceMotion ? undefined : { y: -2 }}
+              className="bg-[#0C0C0E]/94 border border-[#232328] rounded-xl p-4 flex items-center gap-4 relative overflow-hidden group hover:border-[#E84A32]/30 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.015)] transition-colors"
+            >
+              <span className="absolute -right-8 -top-8 w-20 h-20 rounded-full bg-[#E84A32]/0 group-hover:bg-[#E84A32]/[0.035] blur-xl transition-colors duration-300" />
+              <div className="w-11 h-11 rounded-lg bg-[#141418] border border-[#2E2E38] flex items-center justify-center text-[#E84A32] group-hover:border-[#E84A32]/30 group-hover:shadow-[0_0_14px_-4px_rgba(232,74,50,0.4)] transition-all duration-200">
+                <Icon className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold text-[#808088] tracking-wider uppercase font-heading">
+                  {metric.label}
+                </p>
+                <p className="text-2xl font-black font-heading text-[#F2F2F3] mt-0.5">
+                  {metric.value}
+                </p>
+              </div>
+            </motion.button>
+          );
+        })}
       </div>
 
       {/* Main Grid: Left Cockpit + Right Activity / Target Focus */}
@@ -203,20 +174,28 @@ export const CommandView: React.FC<CommandViewProps> = ({
         <div className="lg:col-span-8 space-y-6">
           {/* CONTINUE MISSÃO Hero Cockpit Card */}
           {focusProject && (
-            <div className="bg-[#0D0807] border border-[#E84A32]/40 rounded-xl p-6 relative overflow-hidden shadow-[0_0_35px_-10px_rgba(232,74,50,0.2)] hud-card-corners">
-              {/* Corner Tag */}
-              <div className="flex items-center gap-2 mb-4">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#E84A32] animate-ping" />
+            <motion.div
+              initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: reduceMotion ? 0 : 0.28, delay: reduceMotion ? 0 : 0.12 }}
+              className="bg-[#0D0807]/96 border border-[#E84A32]/40 rounded-xl p-6 relative overflow-hidden shadow-[0_0_35px_-10px_rgba(232,74,50,0.2)] hud-card-corners"
+            >
+              <div className="absolute -right-16 -top-20 w-52 h-52 rounded-full bg-[#E84A32]/[0.045] blur-3xl pointer-events-none mars-atmosphere-pulse" />
+
+              <div className="flex items-center gap-2 mb-4 relative z-10">
+                <span className="relative flex w-1.5 h-1.5 items-center justify-center">
+                  <span className="absolute inset-0 rounded-full bg-[#E84A32] animate-ping" />
+                  <span className="relative w-1.5 h-1.5 rounded-full bg-[#E84A32]" />
+                </span>
                 <span className="text-[11px] font-bold font-heading text-[#E84A32] tracking-[0.2em] uppercase">
                   CONTINUE MISSÃO
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center relative z-10">
                 {/* Orbital Emblem */}
                 <div className="md:col-span-4 flex items-center justify-center">
                   <div className="relative w-32 h-32 flex items-center justify-center">
-                    {/* SVG Radar HUD Ring */}
                     <svg className="w-full h-full animate-spin-slow" viewBox="0 0 100 100">
                       <circle
                         cx="50"
@@ -234,12 +213,12 @@ export const CommandView: React.FC<CommandViewProps> = ({
                         r="38"
                         stroke="#7D1A12"
                         strokeWidth="1"
+                        strokeDasharray="18 8 3 8"
                         fill="none"
-                        opacity="0.4"
+                        opacity="0.5"
                       />
                     </svg>
 
-                    {/* Central Icon Emblem */}
                     <div className="absolute inset-4 rounded-full bg-radial from-[#380603] to-[#0D0807] border border-[#E84A32] flex items-center justify-center shadow-[0_0_20px_rgba(232,74,50,0.4)]">
                       <span className="text-3xl font-extrabold font-heading text-white tracking-tighter">
                         {focusProject.name.charAt(0)}
@@ -264,7 +243,6 @@ export const CommandView: React.FC<CommandViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Progress Segment */}
                     <div className="text-right">
                       <p className="text-[10px] font-semibold text-[#808088] uppercase tracking-wider font-heading">
                         Progresso da Missão
@@ -277,9 +255,11 @@ export const CommandView: React.FC<CommandViewProps> = ({
 
                   {/* Progress Bar with Mars Red */}
                   <div className="w-full bg-[#1A1A22] h-2 rounded-full overflow-hidden relative">
-                    <div
-                      className="h-full bg-gradient-to-r from-[#9E2214] via-[#E84A32] to-[#FF7A59] rounded-full transition-all duration-500 shadow-[0_0_10px_#E84A32]"
-                      style={{ width: `${focusProject.progress}%` }}
+                    <motion.div
+                      initial={reduceMotion ? false : { width: 0 }}
+                      animate={{ width: `${focusProject.progress}%` }}
+                      transition={{ duration: reduceMotion ? 0 : 0.7, delay: reduceMotion ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] }}
+                      className="mars-progress h-full bg-gradient-to-r from-[#9E2214] via-[#E84A32] to-[#FF7A59] rounded-full shadow-[0_0_10px_#E84A32]"
                     />
                   </div>
                   <div className="flex justify-between text-[10px] text-[#66666D] font-mono-code">
@@ -288,7 +268,6 @@ export const CommandView: React.FC<CommandViewProps> = ({
                     <span>100%</span>
                   </div>
 
-                  {/* Next Action Box */}
                   <div className="pt-2">
                     <p className="text-[10px] font-bold text-[#E84A32] tracking-wider uppercase font-heading">
                       PRÓXIMA AÇÃO
@@ -298,11 +277,10 @@ export const CommandView: React.FC<CommandViewProps> = ({
                     </p>
                   </div>
 
-                  {/* Continue Action Button */}
                   <div className="flex justify-end pt-1">
                     <button
                       onClick={() => onOpenProject(focusProject.id)}
-                      className="px-6 py-2.5 rounded-lg bg-[#E84A32] hover:bg-[#F06447] text-white font-bold text-xs tracking-wider uppercase flex items-center gap-2 shadow-[0_0_20px_rgba(232,74,50,0.4)] transition-all font-heading"
+                      className="px-6 py-2.5 rounded-lg bg-[#E84A32] hover:bg-[#F06447] text-white font-bold text-xs tracking-wider uppercase flex items-center gap-2 shadow-[0_0_20px_rgba(232,74,50,0.4)] font-heading mars-interactive"
                     >
                       <Target className="w-4 h-4" />
                       <span>Continuar</span>
@@ -310,7 +288,7 @@ export const CommandView: React.FC<CommandViewProps> = ({
                   </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* If no projects exist */}
@@ -329,7 +307,7 @@ export const CommandView: React.FC<CommandViewProps> = ({
               </div>
               <button
                 onClick={() => onNavigateTab('projetos')}
-                className="px-6 py-2.5 rounded-lg bg-[#E84A32] hover:bg-[#F06447] text-white font-bold text-xs tracking-wider uppercase inline-flex items-center gap-2 shadow-[0_0_20px_rgba(232,74,50,0.3)] transition-all font-heading"
+                className="px-6 py-2.5 rounded-lg bg-[#E84A32] hover:bg-[#F06447] text-white font-bold text-xs tracking-wider uppercase inline-flex items-center gap-2 shadow-[0_0_20px_rgba(232,74,50,0.3)] font-heading mars-interactive"
               >
                 <Target className="w-4 h-4" />
                 <span>CRIAR PRIMEIRO PROJETO</span>
@@ -339,7 +317,7 @@ export const CommandView: React.FC<CommandViewProps> = ({
 
           {/* VISÃO GERAL DOS PROJETOS */}
           {projects.length > 0 && (
-            <div className="bg-[#0C0C0E] border border-[#232328] rounded-xl p-5 space-y-4">
+            <div className="bg-[#0C0C0E]/94 border border-[#232328] rounded-xl p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold font-heading text-[#F2F2F3] uppercase tracking-wider">
                   VISÃO GERAL DOS PROJETOS
@@ -353,23 +331,23 @@ export const CommandView: React.FC<CommandViewProps> = ({
                 </button>
               </div>
 
-              {/* Horizontal Project Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 {projects.map((proj) => {
                   const isCurrent = focusProject && proj.id === focusProject.id;
 
                   return (
-                    <div
+                    <motion.div
                       key={proj.id}
+                      layout
                       onClick={() => onOpenProject(proj.id)}
-                      className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col justify-between ${
+                      whileHover={reduceMotion ? undefined : { y: -2 }}
+                      className={`p-3 rounded-lg border cursor-pointer transition-colors flex flex-col justify-between ${
                         isCurrent
                           ? 'bg-[#120908] border-[#E84A32]/50 shadow-[0_0_15px_-3px_rgba(232,74,50,0.2)]'
-                          : 'bg-[#0E0E12] border-[#1F1F24] hover:border-[#33333C]'
+                          : 'bg-[#0E0E12] border-[#1F1F24] hover:border-[#E84A32]/25'
                       }`}
                     >
                       <div>
-                        {/* Icon & Name */}
                         <div className="flex items-center gap-2 mb-2">
                           <div className="w-7 h-7 rounded-md bg-[#181820] border border-[#2C2C35] flex items-center justify-center shrink-0">
                             {getProjectIcon(proj.name, proj.type)}
@@ -381,7 +359,6 @@ export const CommandView: React.FC<CommandViewProps> = ({
                           </div>
                         </div>
 
-                        {/* Status / Phase Pill */}
                         <div className="mb-3 space-y-1">
                           {getStatusBadge(proj.status, proj.phase)}
                           {proj.health === 'atencao' && (
@@ -393,16 +370,17 @@ export const CommandView: React.FC<CommandViewProps> = ({
                         </div>
                       </div>
 
-                      {/* Progress Bar & Footer */}
                       <div className="space-y-1.5 pt-2 border-t border-[#1C1C22]">
                         <div className="flex items-center justify-between text-[10px] text-[#A0A0A7] font-heading">
                           <span>PROGRESSO</span>
                           <span className="font-bold text-[#F2F2F3]">{proj.progress}%</span>
                         </div>
                         <div className="w-full bg-[#181820] h-1.5 rounded-full overflow-hidden">
-                          <div
+                          <motion.div
+                            initial={reduceMotion ? false : { width: 0 }}
+                            animate={{ width: `${proj.progress}%` }}
+                            transition={{ duration: reduceMotion ? 0 : 0.48, ease: 'easeOut' }}
                             className="h-full bg-[#E84A32] rounded-full"
-                            style={{ width: `${proj.progress}%` }}
                           />
                         </div>
                         <div className="flex items-center justify-between text-[9px] text-[#66666D] pt-0.5">
@@ -412,7 +390,7 @@ export const CommandView: React.FC<CommandViewProps> = ({
                           </span>
                         </div>
                       </div>
-                    </div>
+                    </motion.div>
                   );
                 })}
               </div>
@@ -423,7 +401,7 @@ export const CommandView: React.FC<CommandViewProps> = ({
         {/* Right 4 Cols: ATIVIDADE RECENTE + FOCO ATUAL */}
         <div className="lg:col-span-4 space-y-6">
           {/* ATIVIDADE RECENTE Box */}
-          <div className="bg-[#0C0C0E] border border-[#232328] rounded-xl p-5 space-y-3">
+          <div className="bg-[#0C0C0E]/94 border border-[#232328] rounded-xl p-5 space-y-3">
             <h3 className="text-xs font-bold font-heading text-[#E84A32] uppercase tracking-wider flex items-center gap-2">
               <Clock className="w-3.5 h-3.5" />
               ATIVIDADE RECENTE
@@ -435,7 +413,6 @@ export const CommandView: React.FC<CommandViewProps> = ({
               ) : (
                 history.slice(0, 4).map((item, idx) => (
                   <div key={item.id || idx} className="flex items-start gap-2.5 text-xs">
-                    {/* Category dot/icon */}
                     <div className="w-2 h-2 rounded-full bg-[#E84A32] mt-1.5 shrink-0 shadow-[0_0_6px_#E84A32]" />
                     <div className="flex-1 overflow-hidden">
                       <p className="text-xs font-semibold text-[#F2F2F3] leading-tight truncate">
@@ -466,13 +443,16 @@ export const CommandView: React.FC<CommandViewProps> = ({
 
           {/* FOCO ATUAL Box */}
           {focusProject && (
-            <div className="bg-[#0C0C0E] border border-[#232328] rounded-xl p-5 space-y-3 relative overflow-hidden hud-card-corners">
+            <div className="bg-[#0C0C0E]/94 border border-[#232328] rounded-xl p-5 space-y-3 relative overflow-hidden hud-card-corners">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold font-heading text-[#E84A32] uppercase tracking-wider flex items-center gap-2">
                   <Target className="w-3.5 h-3.5" />
                   FOCO ATUAL
                 </h3>
-                <span className="w-2 h-2 rounded-full bg-[#E84A32] animate-ping" />
+                <span className="relative flex w-2 h-2 items-center justify-center">
+                  <span className="absolute inset-0 rounded-full bg-[#E84A32] animate-ping" />
+                  <span className="relative w-2 h-2 rounded-full bg-[#E84A32]" />
+                </span>
               </div>
 
               <div className="space-y-2 pt-1">
@@ -500,10 +480,10 @@ export const CommandView: React.FC<CommandViewProps> = ({
 
               <button
                 onClick={() => onOpenProject(focusProject.id)}
-                className="w-full pt-3 mt-2 border-t border-[#1C1C22] text-center text-xs text-[#E84A32] hover:underline font-medium flex items-center justify-center gap-1"
+                className="w-full pt-3 mt-2 border-t border-[#1C1C22] text-center text-xs text-[#E84A32] hover:text-[#FF7A59] font-medium flex items-center justify-center gap-1 transition-colors"
               >
                 <span>Ver detalhes da missão</span>
-                <span>&gt;^</span>
+                <span>↗</span>
               </button>
             </div>
           )}
