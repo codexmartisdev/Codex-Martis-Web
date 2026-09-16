@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { useStore } from '@/lib/store';
 import { CodexLogo } from './CodexLogo';
 import {
@@ -11,8 +12,6 @@ import {
   History,
   Server,
   Settings,
-  Flame,
-  ChevronUp,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -21,7 +20,8 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => {
-  const { currentUser, logout, selectedProjectId, setSelectedProjectId } = useStore();
+  const { currentUser, selectedProjectId, setSelectedProjectId } = useStore();
+  const reduceMotion = useReducedMotion();
 
   const navItems = [
     { id: 'command', label: 'COMMAND', icon: LayoutDashboard },
@@ -32,19 +32,40 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
     { id: 'ambientes', label: 'AMBIENTES', icon: Server },
   ];
 
+  const indicatorTransition = reduceMotion
+    ? { duration: 0 }
+    : { type: 'spring' as const, stiffness: 430, damping: 34, mass: 0.55 };
+
   const handleNavClick = (tabId: string) => {
-    // If we're inside a project command center and user clicks on another tab or 'projetos', handle smoothly
     if (tabId === 'projetos') {
       setSelectedProjectId(null);
     }
     onSelectTab(tabId);
   };
 
+  const renderActiveSurface = () => (
+    <>
+      <motion.span
+        layoutId="codex-sidebar-active-surface"
+        className="absolute inset-0 rounded-lg bg-[#140806] border border-[#E84A32]/60 shadow-[0_0_22px_-4px_rgba(232,74,50,0.28)]"
+        transition={indicatorTransition}
+      />
+      <motion.span
+        layoutId="codex-sidebar-active-rail"
+        className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-[#E84A32] rounded-r-full shadow-[0_0_10px_rgba(232,74,50,0.95)]"
+        transition={indicatorTransition}
+      />
+    </>
+  );
+
   return (
-    <aside className="w-64 bg-[#070709] border-r border-[#232328] flex flex-col justify-between shrink-0 h-screen sticky top-0 select-none z-30 overflow-hidden">
+    <aside className="w-64 bg-[#070709]/95 backdrop-blur-xl border-r border-[#232328] flex flex-col justify-between shrink-0 h-screen sticky top-0 select-none z-30 overflow-hidden">
+      <div className="absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-[#E84A32]/15 to-transparent pointer-events-none" />
+
       {/* Top Header with authentic Logo */}
-      <div>
-        <div className="p-6 pb-6 border-b border-[#18181D] flex flex-col items-center">
+      <div className="relative z-10">
+        <div className="p-6 pb-6 border-b border-[#18181D] flex flex-col items-center relative overflow-hidden">
+          <div className="absolute inset-x-8 -top-10 h-20 bg-[#E84A32]/[0.05] blur-2xl pointer-events-none" />
           <CodexLogo size="lg" showText={true} />
         </div>
 
@@ -58,21 +79,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
               <button
                 key={item.id}
                 onClick={() => handleNavClick(item.id)}
-                className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-xs font-semibold tracking-wider font-heading transition-all group relative ${
+                className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-xs font-semibold tracking-wider font-heading group relative overflow-hidden border mars-interactive ${
                   isActive
-                    ? 'bg-[#140806] text-[#F2F2F3] border border-[#E84A32]/60 shadow-[0_0_20px_-3px_rgba(232,74,50,0.25)]'
-                    : 'text-[#888892] hover:text-[#D8D8DC] hover:bg-[#0E0E12] border border-transparent'
+                    ? 'text-[#F2F2F3] border-transparent'
+                    : 'text-[#888892] hover:text-[#D8D8DC] hover:bg-[#0E0E12] border-transparent'
                 }`}
               >
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-[#E84A32] rounded-r-full shadow-[0_0_8px_#E84A32]" />
-                )}
+                {isActive && renderActiveSurface()}
                 <Icon
-                  className={`w-4 h-4 transition-colors ${
-                    isActive ? 'text-[#E84A32]' : 'text-[#66666D] group-hover:text-[#A0A0A7]'
+                  className={`relative z-10 w-4 h-4 transition-all duration-200 ${
+                    isActive
+                      ? 'text-[#E84A32] drop-shadow-[0_0_6px_rgba(232,74,50,0.45)]'
+                      : 'text-[#66666D] group-hover:text-[#A0A0A7] group-hover:translate-x-0.5'
                   }`}
                 />
-                <span className="uppercase">{item.label}</span>
+                <span className="relative z-10 uppercase">{item.label}</span>
               </button>
             );
           })}
@@ -80,32 +101,34 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
       </div>
 
       {/* Bottom Area with Mars Horizon Curve & Settings & User Card */}
-      <div className="relative">
-        {/* Subtle Decorative Mars horizon graphic in bottom corner */}
-        <div className="absolute -bottom-10 -left-10 w-44 h-44 rounded-full bg-radial from-[#E84A32]/15 via-[#7D1A12]/5 to-transparent blur-xl pointer-events-none" />
+      <div className="relative z-10">
+        <div className="absolute -bottom-12 -left-12 w-48 h-48 rounded-full bg-radial from-[#E84A32]/15 via-[#7D1A12]/5 to-transparent blur-xl pointer-events-none mars-atmosphere-pulse" />
 
         <div className="p-4 pt-2 border-t border-[#18181D] space-y-3 relative z-10">
           {/* Settings Button */}
           <button
             onClick={() => handleNavClick('configuracoes')}
-            className={`w-full flex items-center gap-3.5 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wider font-heading transition-all ${
+            className={`w-full flex items-center gap-3.5 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wider font-heading relative overflow-hidden border mars-interactive ${
               currentTab === 'configuracoes'
-                ? 'bg-[#140806] text-[#F2F2F3] border border-[#E84A32]/60'
-                : 'text-[#888892] hover:text-[#D8D8DC] hover:bg-[#0E0E12]'
+                ? 'text-[#F2F2F3] border-transparent'
+                : 'text-[#888892] hover:text-[#D8D8DC] hover:bg-[#0E0E12] border-transparent'
             }`}
           >
+            {currentTab === 'configuracoes' && renderActiveSurface()}
             <Settings
-              className={`w-4 h-4 ${
-                currentTab === 'configuracoes' ? 'text-[#E84A32]' : 'text-[#66666D]'
+              className={`relative z-10 w-4 h-4 transition-all duration-200 ${
+                currentTab === 'configuracoes'
+                  ? 'text-[#E84A32] drop-shadow-[0_0_6px_rgba(232,74,50,0.45)]'
+                  : 'text-[#66666D]'
               }`}
             />
-            <span className="uppercase">CONFIGURAÇÕES</span>
+            <span className="relative z-10 uppercase">CONFIGURAÇÕES</span>
           </button>
 
           {/* User Status Bar */}
-          <div className="p-2.5 rounded-lg bg-[#0C0C0E] border border-[#1C1C22] flex items-center justify-between">
+          <div className="p-2.5 rounded-lg bg-[#0C0C0E]/90 border border-[#1C1C22] flex items-center justify-between shadow-[inset_0_1px_0_rgba(255,255,255,0.015)]">
             <div className="flex items-center gap-2.5 overflow-hidden">
-              <div className="w-8 h-8 rounded-md bg-[#7D1A12]/50 border border-[#E84A32]/40 text-[#F2F2F3] flex items-center justify-center text-xs font-bold font-heading shrink-0">
+              <div className="w-8 h-8 rounded-md bg-[#7D1A12]/50 border border-[#E84A32]/40 text-[#F2F2F3] flex items-center justify-center text-xs font-bold font-heading shrink-0 shadow-[0_0_12px_-4px_rgba(232,74,50,0.55)]">
                 {currentUser?.avatarInitials || 'MA'}
               </div>
               <div className="overflow-hidden">
@@ -120,7 +143,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
           </div>
 
           <div className="text-center">
-            <span className="text-[10px] font-mono-code text-[#44444C]">
+            <span className="text-[10px] font-mono-code text-[#44444C] tracking-wide">
               Codex Martis • v1.0
             </span>
           </div>
