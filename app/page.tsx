@@ -20,8 +20,9 @@ import {
   CommandPaletteModal,
 } from '@/components/Modals';
 import { ImportProjectJsonModal } from '@/components/ImportProjectJsonModal';
-
 import { MarsSphere } from '@/components/MarsSphere';
+import { MartianAtmosphere } from '@/components/MartianAtmosphere';
+import { ViewTransition } from '@/components/ViewTransition';
 
 function CodexApp() {
   const { isAuthenticated, isAuthLoading, selectedProjectId, setSelectedProjectId } = useStore();
@@ -50,13 +51,14 @@ function CodexApp() {
   // Loading state while Firebase Auth determines operator session
   if (isAuthLoading) {
     return (
-      <div className="min-h-screen w-full bg-[#050505] text-[#F2F2F3] flex flex-col items-center justify-center p-6 relative overflow-hidden select-none">
-        <div className="relative flex flex-col items-center justify-center space-y-6">
+      <div className="martian-shell min-h-screen w-full text-[#F2F2F3] flex flex-col items-center justify-center p-6 relative overflow-hidden select-none">
+        <MartianAtmosphere />
+        <div className="relative z-10 flex flex-col items-center justify-center space-y-6">
           <MarsSphere size={180} withReticle={true} />
           <div className="space-y-2 text-center">
             <div className="flex items-center justify-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#E84A32] animate-ping" />
-              <span className="text-xs font-bold font-heading tracking-[0.25em] text-[#F2F2F3] uppercase">
+              <span className="text-xs font-bold font-heading tracking-[0.25em] text-[#F2F2F3] uppercase mars-text-glow">
                 CODEX MARTIS
               </span>
             </div>
@@ -88,8 +90,12 @@ function CodexApp() {
     setIsNewEnvOpen(true);
   };
 
+  const viewKey = selectedProjectId ? `project:${selectedProjectId}` : currentTab;
+
   return (
-    <div className="flex min-h-screen bg-[#050505] text-[#F2F2F3] relative overflow-x-hidden">
+    <div className="martian-shell flex min-h-screen text-[#F2F2F3] relative overflow-x-hidden">
+      <MartianAtmosphere />
+
       {/* Left Navigation Sidebar */}
       <Sidebar
         currentTab={currentTab}
@@ -101,7 +107,7 @@ function CodexApp() {
       />
 
       {/* Main App Container */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+      <div className="relative z-10 flex-1 flex flex-col min-w-0 min-h-screen">
         {/* Top Operational Navigation Bar */}
         <Navbar
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
@@ -114,64 +120,66 @@ function CodexApp() {
 
         {/* Viewport Content */}
         <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
-          {selectedProjectId ? (
-            <ProjectCommandCenter
-              projectId={selectedProjectId}
-              onBack={() => setSelectedProjectId(null)}
-              onNavigateTab={(tab) => {
-                setSelectedProjectId(null);
-                setCurrentTab(tab);
-              }}
-              onOpenNewTaskModalForProject={handleOpenNewTaskForProject}
-              onOpenNewEnvModalForProject={handleOpenNewEnvForProject}
-            />
-          ) : (
-            <>
-              {currentTab === 'command' && (
-                <CommandView
-                  onNavigateTab={setCurrentTab}
-                  onOpenProject={handleOpenProject}
-                />
-              )}
-              {currentTab === 'projetos' && (
-                <ProjectsView
-                  onOpenProject={handleOpenProject}
-                  onOpenNewProjectModal={() => {
-                    setModalProjectId(undefined);
-                    setIsNewProjectOpen(true);
-                  }}
-                  onOpenImportProjectModal={() => {
-                    setIsImportProjectJsonOpen(true);
-                  }}
-                  onNavigateTab={setCurrentTab}
-                />
-              )}
-              {currentTab === 'tarefas' && (
-                <TasksView
-                  onOpenNewTaskModal={() => {
-                    setModalProjectId(undefined);
-                    setIsNewTaskOpen(true);
-                  }}
-                  onOpenProject={handleOpenProject}
-                  onNavigateTab={setCurrentTab}
-                />
-              )}
-              {currentTab === 'sessoes' && (
-                <SessionsView onOpenProject={handleOpenProject} />
-              )}
-              {currentTab === 'historico' && <HistoryView />}
-              {currentTab === 'ambientes' && (
-                <EnvironmentsView
-                  onOpenNewEnvModal={() => {
-                    setModalProjectId(undefined);
-                    setIsNewEnvOpen(true);
-                  }}
-                  onOpenProject={handleOpenProject}
-                />
-              )}
-              {currentTab === 'configuracoes' && <SettingsView />}
-            </>
-          )}
+          <ViewTransition viewKey={viewKey}>
+            {selectedProjectId ? (
+              <ProjectCommandCenter
+                projectId={selectedProjectId}
+                onBack={() => setSelectedProjectId(null)}
+                onNavigateTab={(tab) => {
+                  setSelectedProjectId(null);
+                  setCurrentTab(tab);
+                }}
+                onOpenNewTaskModalForProject={handleOpenNewTaskForProject}
+                onOpenNewEnvModalForProject={handleOpenNewEnvForProject}
+              />
+            ) : (
+              <>
+                {currentTab === 'command' && (
+                  <CommandView
+                    onNavigateTab={setCurrentTab}
+                    onOpenProject={handleOpenProject}
+                  />
+                )}
+                {currentTab === 'projetos' && (
+                  <ProjectsView
+                    onOpenProject={handleOpenProject}
+                    onOpenNewProjectModal={() => {
+                      setModalProjectId(undefined);
+                      setIsNewProjectOpen(true);
+                    }}
+                    onOpenImportProjectModal={() => {
+                      setIsImportProjectJsonOpen(true);
+                    }}
+                    onNavigateTab={setCurrentTab}
+                  />
+                )}
+                {currentTab === 'tarefas' && (
+                  <TasksView
+                    onOpenNewTaskModal={() => {
+                      setModalProjectId(undefined);
+                      setIsNewTaskOpen(true);
+                    }}
+                    onOpenProject={handleOpenProject}
+                    onNavigateTab={setCurrentTab}
+                  />
+                )}
+                {currentTab === 'sessoes' && (
+                  <SessionsView onOpenProject={handleOpenProject} />
+                )}
+                {currentTab === 'historico' && <HistoryView />}
+                {currentTab === 'ambientes' && (
+                  <EnvironmentsView
+                    onOpenNewEnvModal={() => {
+                      setModalProjectId(undefined);
+                      setIsNewEnvOpen(true);
+                    }}
+                    onOpenProject={handleOpenProject}
+                  />
+                )}
+                {currentTab === 'configuracoes' && <SettingsView />}
+              </>
+            )}
+          </ViewTransition>
         </main>
       </div>
 
