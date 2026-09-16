@@ -1,30 +1,99 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 :root {
   --mars-red: #E84A32;
   --mars-highlight: #F06447;
+  --mars-ember: #FF7A59;
   --mars-dark: #7D1A12;
+  --mars-deep: #3A0805;
   --surface-0: #050505;
   --surface-1: #0C0C0E;
   --surface-2: #141416;
   --surface-3: #1C1C20;
   --border-dim: #222227;
   --border-focus: #E84A32;
+  --motion-fast: 120ms;
+  --motion-ui: 180ms;
+  --motion-view: 220ms;
+  --motion-slow: 520ms;
+  --ease-mars: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html {
+  background: var(--surface-0);
+  scroll-behavior: smooth;
 }
 
 body {
-  background-color: #050505;
+  background-color: var(--surface-0);
   color: #F2F2F3;
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans), 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   overflow-x: hidden;
 }
 
 .font-heading {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-heading), 'Space Grotesk', sans-serif;
 }
 
 .font-mono-code {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+}
+
+/* Global Martian command-shell atmosphere */
+.martian-shell {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 76% -12%, rgba(232, 74, 50, 0.10), transparent 31rem),
+    radial-gradient(circle at 18% 108%, rgba(125, 26, 18, 0.08), transparent 34rem),
+    var(--surface-0);
+}
+
+.martian-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.martian-atmosphere::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.22;
+  background-image:
+    linear-gradient(rgba(232, 74, 50, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232, 74, 50, 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(circle at 55% 42%, black 0%, rgba(0, 0, 0, 0.82) 34%, transparent 82%);
+  animation: mars-grid-drift 32s linear infinite;
+}
+
+.martian-atmosphere::after {
+  content: '';
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  top: -8%;
+  opacity: 0.15;
+  background: linear-gradient(90deg, transparent, rgba(255, 122, 89, 0.45), #E84A32, rgba(255, 122, 89, 0.45), transparent);
+  box-shadow: 0 0 18px rgba(232, 74, 50, 0.32);
+  animation: mars-scan 14s linear infinite;
+}
+
+.mars-horizon-glow {
+  position: absolute;
+  width: min(54vw, 760px);
+  height: min(54vw, 760px);
+  right: -18vw;
+  bottom: -34vw;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(232, 74, 50, 0.14) 0%, rgba(125, 26, 18, 0.06) 44%, transparent 70%);
+  filter: blur(18px);
+  animation: mars-breathe 7s var(--ease-mars) infinite alternate;
 }
 
 /* Sci-fi HUD corner accents & borders */
@@ -66,6 +135,59 @@ body {
   pointer-events: none;
 }
 
+.mars-interactive {
+  transition:
+    transform var(--motion-ui) var(--ease-mars),
+    border-color var(--motion-ui) ease,
+    background-color var(--motion-ui) ease,
+    color var(--motion-ui) ease,
+    box-shadow var(--motion-ui) ease,
+    opacity var(--motion-ui) ease;
+}
+
+.mars-interactive:hover {
+  transform: translateY(-1px);
+}
+
+.mars-progress {
+  position: relative;
+  overflow: hidden;
+}
+
+.mars-progress::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 10%, rgba(255, 255, 255, 0.18) 50%, transparent 90%);
+  transform: translateX(-130%);
+  animation: mars-progress-shimmer 3.8s ease-in-out infinite;
+}
+
+.mars-reticle-ring {
+  transform-origin: center;
+  animation: mars-orbit-cw 36s linear infinite;
+}
+
+.mars-reticle-ring-reverse {
+  transform-origin: center;
+  animation: mars-orbit-ccw 25s linear infinite;
+}
+
+.mars-atmosphere-pulse {
+  transform-origin: center;
+  animation: mars-breathe 6.5s var(--ease-mars) infinite alternate;
+}
+
+.animate-spin-slow {
+  transform-origin: center;
+  animation: mars-orbit-cw 28s linear infinite;
+}
+
+.animate-spin-slower-reverse {
+  transform-origin: center;
+  animation: mars-orbit-ccw 42s linear infinite;
+}
+
 /* Custom Martian scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
@@ -94,3 +216,51 @@ body {
   text-shadow: 0 0 12px rgba(232, 74, 50, 0.5);
 }
 
+@keyframes mars-orbit-cw {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes mars-orbit-ccw {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes mars-breathe {
+  0% { opacity: 0.62; transform: scale(0.985); }
+  100% { opacity: 1; transform: scale(1.025); }
+}
+
+@keyframes mars-grid-drift {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 56px 56px, 56px 56px; }
+}
+
+@keyframes mars-scan {
+  0% { transform: translateY(0); opacity: 0; }
+  10% { opacity: 0.12; }
+  55% { opacity: 0.18; }
+  92% { opacity: 0.08; }
+  100% { transform: translateY(116vh); opacity: 0; }
+}
+
+@keyframes mars-progress-shimmer {
+  0%, 72% { transform: translateX(-130%); opacity: 0; }
+  82% { opacity: 0.8; }
+  100% { transform: translateX(130%); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
