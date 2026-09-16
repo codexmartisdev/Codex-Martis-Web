@@ -17,7 +17,6 @@ import {
   NewProjectModal,
   NewTaskModal,
   NewEnvironmentModal,
-  CommandPaletteModal,
 } from '@/components/Modals';
 import { ImportProjectJsonModal } from '@/components/ImportProjectJsonModal';
 import { MarsSphere } from '@/components/MarsSphere';
@@ -26,6 +25,7 @@ import { ViewTransition } from '@/components/ViewTransition';
 import { BootSequence } from '@/components/BootSequence';
 import { CyberStatusRail } from '@/components/CyberStatusRail';
 import { CyberCommandDeck } from '@/components/CyberCommandDeck';
+import { CyberCommandPaletteModal } from '@/components/CyberCommandPaletteModal';
 
 function CodexApp() {
   const { isAuthenticated, isAuthLoading, selectedProjectId, setSelectedProjectId } = useStore();
@@ -234,7 +234,7 @@ function CodexApp() {
         defaultProjectId={modalProjectId}
       />
 
-      <CommandPaletteModal
+      <CyberCommandPaletteModal
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
         onSelectProject={handleOpenProject}
