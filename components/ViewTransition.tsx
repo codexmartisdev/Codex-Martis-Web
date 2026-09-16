@@ -15,6 +15,7 @@ export const ViewTransition: React.FC<ViewTransitionProps> = ({
   className = '',
 }) => {
   const reduceMotion = useReducedMotion();
+  const marsEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
   const initial = reduceMotion
     ? { opacity: 1 }
@@ -35,7 +36,7 @@ export const ViewTransition: React.FC<ViewTransitionProps> = ({
         exit={exit}
         transition={{
           duration: reduceMotion ? 0 : 0.22,
-          ease: [0.22, 1, 0.36, 1],
+          ease: marsEase,
         }}
         className={className}
       >
