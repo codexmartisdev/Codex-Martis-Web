@@ -23,6 +23,9 @@ import { ImportProjectJsonModal } from '@/components/ImportProjectJsonModal';
 import { MarsSphere } from '@/components/MarsSphere';
 import { MartianAtmosphere } from '@/components/MartianAtmosphere';
 import { ViewTransition } from '@/components/ViewTransition';
+import { BootSequence } from '@/components/BootSequence';
+import { CyberStatusRail } from '@/components/CyberStatusRail';
+import { CyberCommandDeck } from '@/components/CyberCommandDeck';
 
 function CodexApp() {
   const { isAuthenticated, isAuthLoading, selectedProjectId, setSelectedProjectId } = useStore();
@@ -95,6 +98,7 @@ function CodexApp() {
   return (
     <div className="martian-shell flex min-h-screen text-[#F2F2F3] relative overflow-x-hidden">
       <MartianAtmosphere />
+      <BootSequence />
 
       {/* Left Navigation Sidebar */}
       <Sidebar
@@ -119,7 +123,7 @@ function CodexApp() {
         />
 
         {/* Viewport Content */}
-        <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-6 pb-16 max-w-7xl w-full mx-auto">
           <ViewTransition viewKey={viewKey}>
             {selectedProjectId ? (
               <ProjectCommandCenter
@@ -135,10 +139,19 @@ function CodexApp() {
             ) : (
               <>
                 {currentTab === 'command' && (
-                  <CommandView
-                    onNavigateTab={setCurrentTab}
-                    onOpenProject={handleOpenProject}
-                  />
+                  <>
+                    <CommandView
+                      onNavigateTab={setCurrentTab}
+                      onOpenProject={handleOpenProject}
+                    />
+                    <CyberCommandDeck
+                      onNavigateTab={(tab) => {
+                        setSelectedProjectId(null);
+                        setCurrentTab(tab);
+                      }}
+                      onOpenProject={handleOpenProject}
+                    />
+                  </>
                 )}
                 {currentTab === 'projetos' && (
                   <ProjectsView
@@ -182,6 +195,8 @@ function CodexApp() {
           </ViewTransition>
         </main>
       </div>
+
+      <CyberStatusRail />
 
       {/* Interactive Global Modals */}
       <NewProjectModal
