@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Activity, Database, Radio, ShieldCheck, TerminalSquare } from 'lucide-react';
+import { Activity, Database, Radio, ShieldCheck, SquareTerminal } from 'lucide-react';
 import { useStore } from '@/lib/store';
 
 export const CyberStatusRail: React.FC = () => {
@@ -19,7 +19,7 @@ export const CyberStatusRail: React.FC = () => {
     <div className="hidden md:flex fixed bottom-0 left-64 right-0 z-40 h-8 items-center justify-between gap-4 px-4 border-t border-[#24242B] bg-[#060608]/92 backdrop-blur-xl font-mono-code text-[9px] tracking-wide select-none">
       <div className="flex items-center gap-4 min-w-0">
         <span className="flex items-center gap-1.5 text-[#FF7A59] shrink-0">
-          <TerminalSquare className="w-3 h-3" />
+          <SquareTerminal className="w-3 h-3" />
           MARS://CODEX-CORE
         </span>
         <span className="h-3 w-px bg-[#24242B]" />
